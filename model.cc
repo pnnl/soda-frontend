@@ -5,10 +5,6 @@
 #include <boost/property_tree/json_parser.hpp>
 #include <boost/foreach.hpp>
 
-#include <sstream>
-
-#include <boost/filesystem.hpp>
-
 namespace SODA_FrontEnd
 {
 void Model::loadArch(std::string &arch_file)
