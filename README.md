@@ -3,7 +3,7 @@ Front-end prototype
 Dependencies: hdf5(serial), boost library
 
 Sample run:
-/soda\_frontend --arch-json examples/lenet.json --weight-h5 examples/lenet.h5 --mlir-gen translations/lenet.mlir
+./soda\_frontend --arch-json examples/lenet.json --weight-h5 examples/lenet.h5 --mlir-gen translations/lenet.mlir
 
 Common issue and solution:  
 "hdf5.h: No such file or directory":  
