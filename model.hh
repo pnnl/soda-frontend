@@ -1,5 +1,5 @@
-#ifndef __MODEL_H__
-#define __MODEL_H__
+#ifndef __MODEL_HH__
+#define __MODEL_HH__
 
 #include <fstream>
 #include <iostream>
@@ -13,7 +13,7 @@ namespace SODA_FrontEnd
 #define MAX_NAME 1024
 class Model
 {
-  protected:
+  public:
     // TODO, capture more information from json file.
     class Layer
     {
@@ -38,8 +38,25 @@ class Model
             MAX
         }layer_type = Layer_Type::MAX;
 
+        enum class Data_Type : int
+        {
+            f32,
+            MAX
+        }d_type = Data_Type::MAX;
+
+        bool isF32() { return d_type == Data_Type::f32; }
+
+        void setDataType(std::string &_type)
+        {
+            if (_type == "float32") { d_type = Data_Type::f32; }
+        }
+
         Layer() {}
         Layer(std::string &_name, Layer_Type &_type) : name(_name), layer_type(_type) {}
+
+        unsigned id;
+        void setID(unsigned _id) { id = _id; }
+        auto getID() { return id; }
 
         void setWeights(std::vector<unsigned> &_w_dims,
                         std::vector<float> &_weights)
@@ -81,14 +98,18 @@ class Model
         {
             output_dims = _dims;
         }
+        auto& getOutputDim() { return output_dims; }
 
         std::string name; // Name of the layer
+        auto &getName() { return name; }
 
         // weights/biases for CONV2D/Dense
         std::vector<unsigned> w_dims; // dims of the weights
         std::vector<float> weights; // all the weight
         std::vector<unsigned> b_dims; // dims of the bias
         std::vector<float> bias; // all the bias
+
+        auto &getKernelDim() { return w_dims; }
 
         // Padding type of the layer, used for CONV2D
         enum class Padding_Type : int
@@ -119,8 +140,15 @@ class Model
       protected:
         std::vector<Layer> layers;
 
+        std::string mlir_gen_fn;
       public:
         Architecture() {}
+
+        void setMLIRGeneratorFile(std::string _fn)
+        {
+            // TODO, set it to code-gen class
+            mlir_gen_fn = _fn;
+        }
 
         void addLayer(std::string &_name, Layer::Layer_Type &_type)
         {
@@ -138,6 +166,8 @@ class Model
             exit(0);
         }
 
+        void MLIRGenerator();
+
         void printLayers() // Only used for small network debuggings.
         {
             for (auto &layer : layers)
@@ -146,15 +176,24 @@ class Model
                 auto type = layer.layer_type;
 
                 std::cout << "Layer name: " << name << "; ";
-                if (type == Layer::Layer_Type::Input) { std::cout << "Layer type: Input"; }
-		else if (type == Layer::Layer_Type::Conv2D) { std::cout << "Layer type: Conv2D"; }
-                else if (type == Layer::Layer_Type::Activation) { std::cout << "Layer type: Activation"; }
-                else if (type == Layer::Layer_Type::BatchNormalization) { std::cout << "Layer type: BatchNormalization"; }
-                else if (type == Layer::Layer_Type::Dropout) { std::cout << "Layer type: Dropout"; }
-                else if (type == Layer::Layer_Type::MaxPooling2D) { std::cout << "Layer type: MaxPooling2D"; }
-                else if (type == Layer::Layer_Type::AveragePooling2D) { std::cout << "Layer type: AveragePooling2D"; }
-                else if (type == Layer::Layer_Type::Flatten) { std::cout << "Layer type: Flatten"; }
-                else if (type == Layer::Layer_Type::Dense) { std::cout << "Layer type: Dense"; }
+                if (type == Layer::Layer_Type::Input) 
+                { std::cout << "Layer type: Input"; }
+                else if (type == Layer::Layer_Type::Conv2D) 
+                { std::cout << "Layer type: Conv2D"; }
+                else if (type == Layer::Layer_Type::Activation) 
+                { std::cout << "Layer type: Activation"; }
+                else if (type == Layer::Layer_Type::BatchNormalization) 
+                { std::cout << "Layer type: BatchNormalization"; }
+                else if (type == Layer::Layer_Type::Dropout) 
+                { std::cout << "Layer type: Dropout"; }
+                else if (type == Layer::Layer_Type::MaxPooling2D) 
+                { std::cout << "Layer type: MaxPooling2D"; }
+                else if (type == Layer::Layer_Type::AveragePooling2D) 
+                { std::cout << "Layer type: AveragePooling2D"; }
+                else if (type == Layer::Layer_Type::Flatten) 
+                { std::cout << "Layer type: Flatten"; }
+                else if (type == Layer::Layer_Type::Dense)
+                { std::cout << "Layer type: Dense"; }
                 else { std::cerr << "Error: unsupported layer type\n"; exit(0); }
                 std::cout << "\n";
               
@@ -194,13 +233,19 @@ class Model
     Architecture arch;
 
   public:
-    Model(std::string &arch_file, std::string &weight_file)
+    Model(std::string &arch_file, 
+          std::string &weight_file,
+          std::string &mlir_gen)
     {
         loadArch(arch_file);
         loadWeights(weight_file);
+
+        arch.setMLIRGeneratorFile(mlir_gen);
     }
 
     void printLayers() { arch.printLayers(); }
+
+    void MLIRGenerator() { arch.MLIRGenerator(); }
 
   protected:
     void loadArch(std::string &arch_file);

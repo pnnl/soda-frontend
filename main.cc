@@ -1,19 +1,14 @@
-#include <stdlib.h>
+#include "util/args.hh"
+#include "model.hh"
 
-#include "model.h"
-
-int main(int argc, char *argv[])
+int main(int argc, const char *argv[])
 {
-    if (argc != 3)
-    {
-        std::cout << "Incorrect Usage\n";
-        std::cout << "./main <arch_file> <weight_file>\n";
-        return 1;
-    }
-    std::string arch_file(argv[1]);
-    std::string weight_file(argv[2]);
+    std::cout << "SODA FrontEnd. ./soda_frontend --help\n\n";
+    SODA_FrontEnd::Args args(argc, argv);
+    SODA_FrontEnd::Model model(args.getArchJson(), 
+                               args.getWeightH5(),
+                               args.getGenMLIROutFn());
 
-    SODA_FrontEnd::Model model(arch_file, weight_file);
-    
-    model.printLayers();
+    model.MLIRGenerator();
+    // model.printLayers();
 }
