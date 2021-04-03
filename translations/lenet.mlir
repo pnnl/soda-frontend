@@ -8,5 +8,8 @@ func @main() -> ()
     // Input Size: 1 28 28 1 
     %0 = memref.alloc() : memref<1x28x28x1xf32>
 
+    // Layer Type: Conv2D
+    // Layer Name: conv2d
+
     return;
 }

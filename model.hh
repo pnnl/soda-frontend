@@ -44,13 +44,7 @@ class Model
             MAX
         }d_type = Data_Type::MAX;
 
-        bool isF32() { return d_type == Data_Type::f32; }
-
-        void setDataType(std::string &_type)
-        {
-            if (_type == "float32") { d_type = Data_Type::f32; }
-        }
-
+        
         Layer() {}
         Layer(std::string &_name, Layer_Type &_type) : name(_name), layer_type(_type) {}
 
@@ -58,12 +52,52 @@ class Model
         void setID(unsigned _id) { id = _id; }
         auto getID() { return id; }
 
+
+        std::string name; // Name of the layer
+        auto &getName() { return name; }
+
+        // weights/biases for CONV2D/Dense
+        std::vector<unsigned> w_dims; // dims of the weights
+        std::vector<float> weights; // all the weight
+        std::vector<unsigned> b_dims; // dims of the bias
+        std::vector<float> bias; // all the bias
+        // dilation rage
+        std::vector<unsigned> dilations;
+
+        // Padding type of the layer, used for CONV2D
+        enum class Padding_Type : int
+        {
+            same,
+            valid
+        }padding_type = Padding_Type::valid;
+        // strides, used for CONV2D/MaxPooling/AveragePooling
+        std::vector<unsigned> strides;
+
+        // TODO, need to extract more information
+        // For batch-normalization
+        std::vector<unsigned> beta_dims;
+        std::vector<float> beta;
+        std::vector<unsigned> gamma_dims;
+        std::vector<float> gamma;
+        std::vector<unsigned> moving_mean_dims;
+        std::vector<float> moving_mean;
+        std::vector<unsigned> moving_variance_dims;
+        std::vector<float> moving_variance;
+
+	std::vector<unsigned> output_dims; // dimension of output
+
+        void setDataType(std::string &_type)
+        {
+            if (_type == "float32") { d_type = Data_Type::f32; }
+        }
+        auto &getDataType() { return d_type; }
         void setWeights(std::vector<unsigned> &_w_dims,
                         std::vector<float> &_weights)
         {
             w_dims = _w_dims;
             weights = _weights;
         }
+        auto &getKernelDim() { return w_dims; }
         void setBiases(std::vector<unsigned> &_b_dims,
                        std::vector<float> &_bias)
         {
@@ -74,6 +108,11 @@ class Model
         {
             strides = _strides;
         }
+        void setDilations(std::vector<unsigned> &_dilations)
+        {
+            dilations = _dilations;
+        }
+        auto &getDilations() { return dilations; }
         void setBeta(std::vector<unsigned> &dims, std::vector<float> &data)
         {
             beta_dims = dims;
@@ -99,39 +138,6 @@ class Model
             output_dims = _dims;
         }
         auto& getOutputDim() { return output_dims; }
-
-        std::string name; // Name of the layer
-        auto &getName() { return name; }
-
-        // weights/biases for CONV2D/Dense
-        std::vector<unsigned> w_dims; // dims of the weights
-        std::vector<float> weights; // all the weight
-        std::vector<unsigned> b_dims; // dims of the bias
-        std::vector<float> bias; // all the bias
-
-        auto &getKernelDim() { return w_dims; }
-
-        // Padding type of the layer, used for CONV2D
-        enum class Padding_Type : int
-        {
-            same,
-            valid
-        }padding_type = Padding_Type::valid;
-        // strides, used for CONV2D/MaxPooling/AveragePooling
-        std::vector<unsigned> strides;
-
-        // TODO, need to extract more information
-        // For batch-normalization
-        std::vector<unsigned> beta_dims;
-        std::vector<float> beta;
-        std::vector<unsigned> gamma_dims;
-        std::vector<float> gamma;
-        std::vector<unsigned> moving_mean_dims;
-        std::vector<float> moving_mean;
-        std::vector<unsigned> moving_variance_dims;
-        std::vector<float> moving_variance;
-
-	std::vector<unsigned> output_dims; // dimension of output
     };
 
     // Model - Architecture

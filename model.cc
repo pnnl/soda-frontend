@@ -14,7 +14,8 @@ void Model::Architecture::MLIRGenerator()
     // TODO, let's assume a serial connection
     Linalg::MLIRGen mlir_gen(mlir_gen_fn);
     mlir_gen.genInit();
-    for (auto i = 0; i < layers.size(); i++)
+    // for (auto i = 0; i < layers.size(); i++)
+    for (auto i = 0; i < 2; i++)
     {
         layers[i].setID(i);
         if (layers[i].layer_type == Layer::Layer_Type::Input)
@@ -162,6 +163,20 @@ void Model::loadArch(std::string &arch_file)
   
                 for (auto stride : strides_str) { strides.push_back(stoll(stride)); }
                 arch.getLayer(name).setStrides(strides);
+            }
+
+            if (class_name == "Conv2D")
+            {
+                std::vector<std::string> dilations_str;
+                std::vector<unsigned> dilations;
+                for (boost::property_tree::ptree::value_type &cell : 
+                     v.second.get_child("config.dilation_rate"))
+                {
+                    dilations_str.push_back(cell.second.get_value<std::string>());
+                }
+  
+                for (auto d : dilations_str) { dilations.push_back(stoll(d)); }
+                arch.getLayer(name).setDilations(dilations);
             }
 
             if (class_name == "MaxPooling2D" || 
