@@ -1,4 +1,4 @@
-Front-end prototype
+SODA Front-end prototype
 
 Dependencies: hdf5(serial), boost library
 
