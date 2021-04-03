@@ -66,7 +66,7 @@ def l_model(width, height, depth, NB_CLASS):
 
     model.add(InputLayer(input_shape=inputShape))
 
-    model.add(Conv2D(6, (5, 5), input_shape=inputShape,  use_bias=False))
+    model.add(Conv2D(6, (5, 5), input_shape=inputShape,  use_bias=False, padding="same"))
 
     model.add(Activation("relu"))
 

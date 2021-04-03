@@ -40,6 +40,10 @@ class MLIRGen
 
     std::string genMemRef(std::vector<unsigned> &dims,
                           Layer::Data_Type &d_type);
+
+    std::string genDilations(std::vector<unsigned>&);
+    std::string genPaddings(std::vector<std::vector<unsigned>>&);
+    std::string genStrides(std::vector<unsigned>&);
 };
 }
 }

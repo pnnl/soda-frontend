@@ -11,7 +11,7 @@ namespace Linalg
 {
 #define UNDEFINED 0
 #define ALLOC 1
-#define CONV 2
+#define CONV2D 2
 
 class MLIRDict
 {
@@ -23,7 +23,7 @@ class MLIRDict
     {
         dict.insert({UNDEFINED, "<UNDEFINED>"});
         dict.insert({ALLOC, "memref.alloc"});
-        dict.insert({CONV, "linalg.conv"});
+        dict.insert({CONV2D, "linalg.conv"});
         
     }
 

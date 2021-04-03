@@ -108,6 +108,7 @@ class Model
         {
             strides = _strides;
         }
+        auto &getStrides() { return strides; }
         void setDilations(std::vector<unsigned> &_dilations)
         {
             dilations = _dilations;
