@@ -15,7 +15,7 @@ void Model::Architecture::MLIRGenerator()
     Linalg::MLIRGen mlir_gen(mlir_gen_fn);
     mlir_gen.genInit();
     // for (auto i = 0; i < layers.size(); i++)
-    for (auto i = 0; i < 2; i++)
+    for (auto i = 0; i < 3; i++)
     {
         layers[i].setID(i);
         if (layers[i].layer_type == Layer::Layer_Type::Input)
@@ -24,7 +24,11 @@ void Model::Architecture::MLIRGenerator()
         }
         else if (layers[i].layer_type == Layer::Layer_Type::Conv2D)
         {
-           mlir_gen.genConv2DLayer(layers[i-1], layers[i]); 
+            mlir_gen.genConv2DLayer(layers[i-1], layers[i]); 
+        }
+        else if (layers[i].layer_type == Layer::Layer_Type::Activation)
+        {
+            mlir_gen.genActLayer(layers[i-1], layers[i]);
         }
     }
     mlir_gen.genEnd();
@@ -194,6 +198,12 @@ void Model::loadArch(std::string &arch_file)
 
                 for (auto size : pool_size_str) { pool_size.push_back(stoll(size)); }
                 pool_size.push_back(1); // depth is 1
+            }
+
+            if (class_name == "Activation")
+            {
+                std::string act = v.second.get<std::string>("config.activation");
+                arch.getLayer(name).setActivation(act);
             }
 
             layer_counter++;

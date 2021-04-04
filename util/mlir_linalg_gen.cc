@@ -39,6 +39,7 @@ void MLIRGen::genInputLayer(Layer& layer)
 
 // TODO, this is only for 2D image
 // TODO-Shihao, discuss with Vinay on what happens for a 3D image
+// TODO-Shihao, fill kernel into memory
 void MLIRGen::genConv2DLayer(Layer& prev_layer,
                              Layer& cur_layer)
 {
@@ -113,6 +114,7 @@ void MLIRGen::genConv2DLayer(Layer& prev_layer,
     mlir << "    // Output size: ";
     for (auto dim : output_shape) { mlir << dim << " "; }
     mlir << "\n";
+    cur_layer.setOutputDim(output_shape);
 
     std::vector<unsigned> pad_along_height = 
         {pad_top, pad_bottom};
@@ -165,6 +167,49 @@ void MLIRGen::genConv2DLayer(Layer& prev_layer,
          + kernel_memref + ", "
          + input_memref + ", "
          + output_memref + "\n";
+    mlir << code;
+    mlir << "\n";
+}
+
+void MLIRGen::genActLayer(Layer& prev_layer,
+                          Layer& cur_layer)
+{
+    mlir << "    // Layer Type: Activation\n"
+         << "    // Layer Name: " << cur_layer.getName() << "\n";
+    auto prev_layer_id = prev_layer.getID();
+    auto cur_layer_id = cur_layer.getID();
+    mlir << "    // Input from layer: " << prev_layer.getName() << "\n";
+    auto input_buffer_reg = layer_output_buffer[prev_layer_id];
+    mlir << "    // Input buffer: %"
+         << input_buffer_reg << " : ";
+    auto& input_shape = prev_layer.getOutputDim();
+    auto& input_dtype = prev_layer.getDataType();
+    auto input_memref = genMemRef(input_shape, input_dtype);
+    mlir << input_memref << "\n";
+
+    // Output shape reminds the same
+    mlir << "    // Output buffer: %"
+         << input_buffer_reg << " : "
+         << input_memref << "\n";
+
+    cur_layer.setOutputDim(input_shape);
+    // Keep the same 
+    layer_output_buffer.push_back(global_register_tracker);
+
+    std::string code;
+    if (cur_layer.getActivation() == Layer::Activation::relu)
+    {
+        mlir << "    // Activation: relu\n";
+        std::string cur_layer_dtype;
+        if (cur_layer.getDataType() == Layer::Data_Type::f32)
+        {
+            cur_layer_dtype = "f32";
+        }
+        code = genRelu(input_buffer_reg, 
+                       input_shape, 
+                       input_memref, 
+                       cur_layer_dtype);
+    }
     mlir << code;
     mlir << "\n";
 }
@@ -242,6 +287,7 @@ std::string MLIRGen::genPaddings(std::vector<std::vector<unsigned>> &padding)
         out_cnt++;
     }
 
+    // TODO, there should be lots error checking through the codes
     ret = ret + "> : tensor<"
         + std::to_string(padding.size()) + "x"
         + std::to_string(padding[0].size()) + "x"
@@ -263,6 +309,98 @@ std::string MLIRGen::genStrides(std::vector<unsigned>& stride)
     return ret;
 
 }
+
+std::string MLIRGen::genRelu(unsigned buffer_id,
+                             std::vector<unsigned> &shape,
+                             std::string &shape_memref,
+                             std::string &dtype)
+{
+    std::string ret;
+
+    int num_of_loops = shape.size();
+    
+    // Gen loop statement
+    for (auto i = 0; i < num_of_loops; i++)
+    {
+        std::string one_loop = 
+            std::string(4 + i * 2, ' ')
+            + dict[FOR] 
+            + " %" + index_str[i] + " = 0 to " 
+            + std::to_string(shape[i])
+            + " step 1\n"
+            + std::string(4 + i * 2, ' ') + "{\n";
+        ret += one_loop; 
+    }
+
+    // Gen loading
+    auto load_str = std::string(4 + num_of_loops * 2, ' ')
+                  + "%tmp = "
+                  + genLoad(buffer_id, 0, num_of_loops - 1, shape_memref) + "\n";
+    ret += load_str;
+
+    // Gen zero
+    std::string zero = "\%zero";
+    if (dtype == "f32")
+    {
+        ret += (std::string(4 + num_of_loops * 2, ' ') + 
+                genZeroF() + "\n");
+    }
+
+    // Gen compare
+    ret += (std::string(4 + num_of_loops * 2, ' ') + 
+           "\%cond = " + dict[CMPLT] + ", %tmp, \%zero : " + 
+           dtype + "\n");
+
+    // Gen if-store
+    ret += (std::string(4 + num_of_loops * 2, ' ') + 
+            dict[IF] + " \%cond\n" +
+            std::string(4 + num_of_loops * 2, ' ') + "{\n" +
+            std::string(4 + (num_of_loops + 1) * 2, ' ') +
+            genStore(zero, buffer_id, 0, num_of_loops - 1, shape_memref) + "\n" +
+            std::string(4 + num_of_loops * 2, ' ') + "}\n");
+
+    // Gen loop end
+    for (auto i = num_of_loops - 1; i >= 0; i--)
+    {
+        std::string one_loop = 
+            std::string(4 + i * 2, ' ') + "}\n";
+        ret += one_loop; 
+    }
+    return ret;
+}
+
+std::string MLIRGen::genLoad(unsigned buffer_id,
+                             unsigned index_start,
+                             unsigned index_end,
+                             std::string& mem_ref)
+{
+    std::string ret = dict[LOAD] + " %" + std::to_string(buffer_id) + "[";
+    for (auto i = index_start; i < index_end; i++)
+    {
+        ret += ("%" + index_str[i] + ", ");
+    }
+    ret += ("%" + index_str[index_end] + "] : " + mem_ref);
+
+    return ret;
+}
+
+std::string MLIRGen::genStore(std::string &val,
+                              unsigned buffer_id,
+                              unsigned index_start,
+                              unsigned index_end,
+                              std::string& mem_ref)
+{
+    std::string ret = dict[STORE] + " " + val + ", "
+                    + " %" + std::to_string(buffer_id) + "[";
+    for (auto i = index_start; i < index_end; i++)
+    {
+        ret += ("%" + index_str[i] + ", ");
+    }
+    ret += ("%" + index_str[index_end] + "] : " + mem_ref);
+
+    return ret;
+}
+
 }
 }
 

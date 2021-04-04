@@ -41,9 +41,7 @@ class Model
         enum class Data_Type : int
         {
             f32,
-            MAX
-        }d_type = Data_Type::MAX;
-
+        }d_type = Data_Type::f32;
         
         Layer() {}
         Layer(std::string &_name, Layer_Type &_type) : name(_name), layer_type(_type) {}
@@ -51,7 +49,6 @@ class Model
         unsigned id;
         void setID(unsigned _id) { id = _id; }
         auto getID() { return id; }
-
 
         std::string name; // Name of the layer
         auto &getName() { return name; }
@@ -63,6 +60,12 @@ class Model
         std::vector<float> bias; // all the bias
         // dilation rage
         std::vector<unsigned> dilations;
+
+        // Activation type
+        enum class Activation : int
+        {
+            relu
+        }activation = Activation::relu;
 
         // Padding type of the layer, used for CONV2D
         enum class Padding_Type : int
@@ -91,6 +94,13 @@ class Model
             if (_type == "float32") { d_type = Data_Type::f32; }
         }
         auto &getDataType() { return d_type; }
+
+        void setActivation(std::string &_act)
+        {
+            if (_act == "relu") { activation = Activation::relu; }
+        }
+        auto &getActivation() { return activation; }
+
         void setWeights(std::vector<unsigned> &_w_dims,
                         std::vector<float> &_weights)
         {
