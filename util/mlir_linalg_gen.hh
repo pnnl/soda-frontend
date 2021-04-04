@@ -47,7 +47,8 @@ class MLIRGen
                         Layer& cur_layer);
     void genActLayer(Layer& prev_layer,
                      Layer& cur_layer);
-
+    void genMaxPooling2DLayer(Layer& prev_layer,
+                              Layer& cur_layer);
     void genEnd();
 
   protected:

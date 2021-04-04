@@ -194,7 +194,7 @@ void MLIRGen::genActLayer(Layer& prev_layer,
 
     cur_layer.setOutputDim(input_shape);
     // Keep the same 
-    layer_output_buffer.push_back(global_register_tracker);
+    layer_output_buffer.push_back(input_buffer_reg);
 
     std::string code;
     if (cur_layer.getActivation() == Layer::Activation::relu)
@@ -210,6 +210,96 @@ void MLIRGen::genActLayer(Layer& prev_layer,
                        input_memref, 
                        cur_layer_dtype);
     }
+    mlir << code;
+    mlir << "\n";
+}
+
+// TODO-Shihao, should support padding in the future
+void MLIRGen::genMaxPooling2DLayer(Layer& prev_layer,
+		                   Layer& cur_layer)
+{
+    mlir << "    // Layer Type: MaxPooling2D\n"
+         << "    // Layer Name: " << cur_layer.getName() << "\n";
+    auto prev_layer_id = prev_layer.getID();
+    auto cur_layer_id = cur_layer.getID();
+    mlir << "    // Input from layer: " << prev_layer.getName() << "\n";
+    auto input_buffer_reg = layer_output_buffer[prev_layer_id];
+    mlir << "    // Input buffer: %"
+         << input_buffer_reg << " : ";
+    auto& input_shape = prev_layer.getOutputDim();
+    auto& input_dtype = prev_layer.getDataType();
+    auto input_memref = genMemRef(input_shape, input_dtype);
+    mlir << input_memref << "\n";
+
+    auto &kernel = cur_layer.getKernelDim();
+    mlir << "    // Kernel dim.: ";
+    for (auto dim : kernel) { mlir << dim << " "; }
+    mlir << "\n";
+
+    auto &stride = cur_layer.getStrides();
+    mlir << "    // Stride dim.: ";
+    for (auto dim : stride) { mlir << dim << " "; }
+    mlir << "\n";
+
+    auto& output_dtype = cur_layer.getDataType();
+    std::vector<unsigned> output_shape;
+
+    unsigned out_height, out_width;
+    if (cur_layer.padding_type == Layer::Padding_Type::valid)
+    {
+        out_height = ceil(float(input_shape[1] - kernel[0] + 1) / 
+                     float(stride[0]));
+	
+        out_width = ceil(float(input_shape[2] - kernel[1] + 1) / 
+                     float(stride[1]));
+    }
+    
+    output_shape.push_back(input_shape[0]);
+    output_shape.push_back(out_height);
+    output_shape.push_back(out_width);
+    output_shape.push_back(input_shape[3]);
+    mlir << "    // Output size: ";
+    for (auto dim : output_shape) { mlir << dim << " "; }
+    mlir << "\n";
+    cur_layer.setOutputDim(output_shape);
+
+    // alloc kernel
+    auto &cur_layer_dtype = cur_layer.getDataType();
+    auto kernel_reg = global_register_tracker;
+    auto kernel_memref = genMemRef(kernel, cur_layer_dtype);
+    std::string code = "    %" + std::to_string(kernel_reg)
+                     + " = "
+                     + dict[ALLOC]
+                     + "() : "
+                     + kernel_memref;
+    mlir << code << "\n";
+    global_register_tracker++;
+
+    // alloc output
+    auto output_reg = global_register_tracker;
+    auto output_memref = genMemRef(output_shape, cur_layer_dtype);
+    code = "    %" + std::to_string(output_reg)
+                   + " = "
+                   + dict[ALLOC]
+                   + "() : "
+                   + output_memref;
+    mlir << code << "\n";
+    layer_output_buffer.push_back(global_register_tracker);
+    global_register_tracker++;
+
+    // Generate linalg maxpooling dialect
+    stride.insert(stride.begin(), 1);
+    stride.push_back(1);
+    code = "    " + dict[MAXPOOL] + "("
+         + "%" + std::to_string(input_buffer_reg) + ", "
+         + "%" + std::to_string(kernel_reg) + ", "
+         + "%" + std::to_string(output_reg) + ")\n"
+         + "    {\n"
+         + "        " + genStrides(stride) + "\n"
+         + "    } : "
+         + input_memref + ", "
+         + kernel_memref + ", "
+         + output_memref + "\n";
     mlir << code;
     mlir << "\n";
 }
@@ -391,7 +481,7 @@ std::string MLIRGen::genStore(std::string &val,
                               std::string& mem_ref)
 {
     std::string ret = dict[STORE] + " " + val + ", "
-                    + " %" + std::to_string(buffer_id) + "[";
+                    + "%" + std::to_string(buffer_id) + "[";
     for (auto i = index_start; i < index_end; i++)
     {
         ret += ("%" + index_str[i] + ", ");
@@ -400,6 +490,7 @@ std::string MLIRGen::genStore(std::string &val,
 
     return ret;
 }
+
 
 }
 }

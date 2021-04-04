@@ -7,7 +7,7 @@ from tensorflow.keras.preprocessing.image import ImageDataGenerator
 from tensorflow.keras.models import Sequential
 from tensorflow.keras.layers import InputLayer
 from tensorflow.keras.layers import Conv2D
-from tensorflow.keras.layers import AveragePooling2D
+from tensorflow.keras.layers import MaxPooling2D
 from tensorflow.keras.layers import Activation
 from tensorflow.keras.layers import Flatten
 from tensorflow.keras.layers import Dense
@@ -70,7 +70,7 @@ def l_model(width, height, depth, NB_CLASS):
 
     model.add(Activation("relu"))
 
-    model.add(AveragePooling2D(pool_size=(2, 2), strides=(2, 2)))
+    model.add(MaxPooling2D(pool_size=(2, 2), strides=(2, 2)))
 
     # second set of CONV => RELU => POOL layers
 
@@ -78,7 +78,7 @@ def l_model(width, height, depth, NB_CLASS):
 
     model.add(Activation("relu"))
 
-    model.add(AveragePooling2D(pool_size=(2, 2), strides=(2, 2)))
+    model.add(MaxPooling2D(pool_size=(2, 2), strides=(2, 2)))
 
     # first (and only) set of FC => RELU layers
 

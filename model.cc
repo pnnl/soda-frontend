@@ -15,7 +15,7 @@ void Model::Architecture::MLIRGenerator()
     Linalg::MLIRGen mlir_gen(mlir_gen_fn);
     mlir_gen.genInit();
     // for (auto i = 0; i < layers.size(); i++)
-    for (auto i = 0; i < 3; i++)
+    for (auto i = 0; i < 7; i++)
     {
         layers[i].setID(i);
         if (layers[i].layer_type == Layer::Layer_Type::Input)
@@ -29,6 +29,10 @@ void Model::Architecture::MLIRGenerator()
         else if (layers[i].layer_type == Layer::Layer_Type::Activation)
         {
             mlir_gen.genActLayer(layers[i-1], layers[i]);
+        }
+        else if (layers[i].layer_type == Layer::Layer_Type::MaxPooling2D)
+        {
+            mlir_gen.genMaxPooling2DLayer(layers[i-1], layers[i]);
         }
     }
     mlir_gen.genEnd();
@@ -196,6 +200,7 @@ void Model::loadArch(std::string &arch_file)
                     pool_size_str.push_back(cell.second.get_value<std::string>());
                 }
 
+                pool_size.push_back(1);
                 for (auto size : pool_size_str) { pool_size.push_back(stoll(size)); }
                 pool_size.push_back(1); // depth is 1
             }

@@ -16,7 +16,8 @@ namespace Linalg
 #define FOR 4
 #define IF 5
 #define LOAD 6
-#define STORE 7
+#define MAXPOOL 7
+#define STORE 8
 
 class MLIRDict
 {
@@ -33,6 +34,7 @@ class MLIRDict
         dict.insert({FOR, "sci.for"});
         dict.insert({IF, "sci.if"});
         dict.insert({LOAD, "load"});
+        dict.insert({MAXPOOL, "linalg.pooling_max"});
         dict.insert({STORE, "store"});
     }
 
