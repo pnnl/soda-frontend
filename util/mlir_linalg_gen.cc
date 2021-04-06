@@ -84,24 +84,37 @@ void MLIRGen::genConv2DLayer(Layer& prev_layer,
              pad_left = 0, pad_right = 0;
     if (cur_layer.padding_type == Layer::Padding_Type::valid)
     {
-        out_height = ceil(float(input_shape[1] - kernel[0] + 1) / 
-                     float(stride[0]));
+        // No padding
+        out_height = ceil(float(input_shape[1] - kernel[0]) / 
+                     float(stride[0])) + 1;
 	
-        out_width = ceil(float(input_shape[2] - kernel[1] + 1) / 
-                     float(stride[1]));
+        out_width = ceil(float(input_shape[2] - kernel[1]) / 
+                     float(stride[1])) + 1;
     }
     else if (cur_layer.padding_type == Layer::Padding_Type::same)
     {
-        out_height = ceil(float(input_shape[1]) / float(stride[0]));
+        // Padding Present
+        // TODO: consider other cases
+        // Kernel size normally odd. 
+        unsigned padding_size = int(kernel[0])/2; 
+        // out_height = ceil(float(input_shape[1]) / float(stride[0]));
 	
-        out_width = ceil(float(input_shape[2]) / float(stride[1]));
+        // out_width = ceil(float(input_shape[2]) / float(stride[1]));
 
-        unsigned pad_along_height = std::max(int((out_height - 1) * stride[0] 
-                                  + kernel[0] - input_shape[1]), 0);
+        out_height = ceil(float(input_shape[1] + 2 * padding_size - kernel[0]) / 
+                     float(stride[0])) + 1;
+	
+        out_width = ceil(float(input_shape[2] + 2 * padding_size - kernel[1]) / 
+                     float(stride[1])) + 1;
 
-        unsigned pad_along_width = std::max(int((out_width - 1) * stride[1] 
-                                 + kernel[1] - input_shape[2]), 0);
+        // unsigned pad_along_height = std::max(int((out_height - 1) * stride[0] 
+        //                           + kernel[0] - input_shape[1]), 0);
+
+        // unsigned pad_along_width = std::max(int((out_width - 1) * stride[1] 
+        //                          + kernel[1] - input_shape[2]), 0);
         // std::cout << pad_along_height << " " << pad_along_width << "\n";
+        unsigned pad_along_height,pad_along_width;
+        pad_along_height = pad_along_width = padding_size;
         pad_top	= pad_along_height / 2;
         pad_bottom = pad_along_height - pad_top;
         pad_left = pad_along_width / 2;
@@ -315,15 +328,27 @@ std::string MLIRGen::genMemRef(std::vector<unsigned> &dims,
                                Layer::Data_Type &d_type)
 {
     std::string ret = "memref<";
-    for (auto dim : dims)
-    {
-        ret += std::to_string(dim);
-        ret += "x";
+    if(dims.size() > 0) {
+        for (auto dim : dims)
+        {
+            ret += std::to_string(dim);
+            ret += "x";
+        }
     }
 
-    if (d_type == Layer::Data_Type::f32)
-    {
-        ret += "f32>";
+    switch (d_type) {
+        case Layer::Data_Type::index :
+            ret += "index>";
+            break;
+        case Layer::Data_Type::i32 :
+            ret += "i32>";
+            break;
+        case Layer::Data_Type::f32 :
+            ret += "f32>";
+            break;
+        default : 
+            // TODO: Proper exit handling 
+            exit (EXIT_FAILURE);
     }
 
     return ret;

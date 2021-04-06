@@ -40,6 +40,8 @@ class Model
 
         enum class Data_Type : int
         {
+            index,
+            i32,
             f32,
         }d_type = Data_Type::f32;
         
