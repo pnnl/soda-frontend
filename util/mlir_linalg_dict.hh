@@ -31,11 +31,11 @@ class MLIRDict
         dict.insert({ALLOC, "memref.alloc"});
         dict.insert({CMPLT, "cmpf \"olt\""});
         dict.insert({CONV2D, "linalg.conv"});
-        dict.insert({FOR, "sci.for"});
-        dict.insert({IF, "sci.if"});
-        dict.insert({LOAD, "load"});
+        dict.insert({FOR, "scf.for"});
+        dict.insert({IF, "scf.if"});
+        dict.insert({LOAD, "memref.load"});
         dict.insert({MAXPOOL, "linalg.pooling_max"});
-        dict.insert({STORE, "store"});
+        dict.insert({STORE, "memref.store"});
     }
 
     std::string& operator[](unsigned opr)
