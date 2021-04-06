@@ -89,7 +89,7 @@ class Model
         std::vector<unsigned> moving_variance_dims;
         std::vector<float> moving_variance;
 
-	std::vector<unsigned> output_dims; // dimension of output
+	    std::vector<unsigned> output_dims; // dimension of output
 
         void setDataType(std::string &_type)
         {
@@ -196,33 +196,93 @@ class Model
 
                 std::cout << "Layer name: " << name << "; ";
                 if (type == Layer::Layer_Type::Input) 
-                { std::cout << "Layer type: Input"; }
+                { 
+                    std::cout << "Layer type: Input" << std::endl;
+                    auto &output_dims = layer.getOutputDim();
+                    std::cout << "Input Shape: ";
+                    for (auto dim : output_dims) { std::cout << dim << " "; }
+                    std::cout << std::endl; 
+
+                    std::cout << "Output Dims: ";
+                    // auto &output_dims = layer.getOutputDim();
+                    for (auto dim : output_dims) { std::cout << dim << " "; }
+                    std::cout << std::endl; 
+                    
+                }
                 else if (type == Layer::Layer_Type::Conv2D) 
-                { std::cout << "Layer type: Conv2D"; }
+                { 
+                    std::cout << "Layer type: Conv2D" << std::endl;
+                    std::cout << "Output Dims: ";
+                    auto &output_dims = layer.getOutputDim();
+                    for (auto dim : output_dims) { std::cout << dim << " "; }
+                    std::cout << std::endl; 
+                }
                 else if (type == Layer::Layer_Type::Activation) 
-                { std::cout << "Layer type: Activation"; }
+                { 
+                    std::cout << "Layer type: Activation" << std::endl; 
+                    std::cout << "Output Dims: ";
+                    auto &output_dims = layer.getOutputDim();
+                    for (auto dim : output_dims) { std::cout << dim << " "; }
+                    std::cout << std::endl;
+                }
                 else if (type == Layer::Layer_Type::BatchNormalization) 
-                { std::cout << "Layer type: BatchNormalization"; }
+                { 
+                    std::cout << "Layer type: BatchNormalization" << std::endl; 
+                    std::cout << "Output Dims: ";
+                    auto &output_dims = layer.getOutputDim();
+                    for (auto dim : output_dims) { std::cout << dim << " "; }
+                    std::cout << std::endl;
+                }
                 else if (type == Layer::Layer_Type::Dropout) 
-                { std::cout << "Layer type: Dropout"; }
+                { 
+                    std::cout << "Layer type: Dropout" << std::endl; 
+                    std::cout << "Output Dims: ";
+                    auto &output_dims = layer.getOutputDim();
+                    for (auto dim : output_dims) { std::cout << dim << " "; }
+                    std::cout << std::endl;
+                }
                 else if (type == Layer::Layer_Type::MaxPooling2D) 
-                { std::cout << "Layer type: MaxPooling2D"; }
+                { 
+                    std::cout << "Layer type: MaxPooling2D" << std::endl; 
+                    std::cout << "Output Dims: ";
+                    auto &output_dims = layer.getOutputDim();
+                    for (auto dim : output_dims) { std::cout << dim << " "; }
+                    std::cout << std::endl;
+                }
                 else if (type == Layer::Layer_Type::AveragePooling2D) 
-                { std::cout << "Layer type: AveragePooling2D"; }
+                { 
+                    std::cout << "Layer type: AveragePooling2D" << std::endl; 
+                    std::cout << "Output Dims: ";
+                    auto &output_dims = layer.getOutputDim();
+                    for (auto dim : output_dims) { std::cout << dim << " "; }
+                    std::cout << std::endl;
+                }
                 else if (type == Layer::Layer_Type::Flatten) 
-                { std::cout << "Layer type: Flatten"; }
+                { 
+                    std::cout << "Layer type: Flatten" << std::endl; 
+                    std::cout << "Output Dims: ";
+                    auto &output_dims = layer.getOutputDim();
+                    for (auto dim : output_dims) { std::cout << dim << " "; }
+                    std::cout << std::endl;
+                }
                 else if (type == Layer::Layer_Type::Dense)
-                { std::cout << "Layer type: Dense"; }
+                { 
+                    std::cout << "Layer type: Dense" << std::endl; 
+                    std::cout << "Output Dims: ";
+                    auto &output_dims = layer.getOutputDim();
+                    for (auto dim : output_dims) { std::cout << dim << " "; }
+                    std::cout << std::endl;
+                }
                 else { std::cerr << "Error: unsupported layer type\n"; exit(0); }
                 std::cout << "\n";
               
-                if (type == Layer::Layer_Type::Input)
-                {
-                    auto &output_dims = layer.output_dims;
-                    std::cout << "Input shape: ";
-                    for (auto dim : output_dims) { std::cout << dim << " "; }
-                    std::cout << "\n";
-                }
+                // if (type == Layer::Layer_Type::Input)
+                // {
+                //     auto &output_dims = layer.output_dims;
+                //     std::cout << "Input shape: ";
+                //     for (auto dim : output_dims) { std::cout << dim << " "; }
+                //     std::cout << "\n";
+                // }
 
                 auto &w_dims = layer.w_dims;
                 auto &weights = layer.weights;

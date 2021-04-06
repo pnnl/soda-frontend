@@ -10,5 +10,6 @@ int main(int argc, const char *argv[])
                                args.getGenMLIROutFn());
 
     model.MLIRGenerator();
-    // model.printLayers();
+    if (args.print_layers)
+        model.printLayers();
 }

@@ -13,12 +13,13 @@ class Args
     std::string arch_json_fn;
     std::string weight_h5_fn;
     std::string gen_mlir_out;
+    bool print_layers; 
 
     auto &getArchJson() { return arch_json_fn; }
     auto &getWeightH5() { return weight_h5_fn; }
     auto &getGenMLIROutFn() { return gen_mlir_out; }
 
-    Args(int argc, const char *argv[])
+    Args(int argc, const char *argv[]): print_layers(0)
     {
         parseArgs(argc, argv);
     }
@@ -34,7 +35,8 @@ class Args
             ("weight-h5", po::value<std::string>(&weight_h5_fn),
                 "Weight file in h5 format")
             ("mlir-gen", po::value<std::string>(&gen_mlir_out),
-                "Generated MLIR output file");
+                "Generated MLIR output file")
+            ("print-layers", "Print layers and dimensions.");
         po::variables_map vm;
         try 
         { 
@@ -45,6 +47,11 @@ class Args
                 std::cout << "SODA front-end: \n" 
                           << desc << "\n";
                 exit(0);
+            }
+
+            if (vm.count("print-layers"))
+            {
+                print_layers=true;
             }
 
             po::notify(vm);
