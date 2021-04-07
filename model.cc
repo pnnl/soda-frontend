@@ -15,7 +15,7 @@ void Model::Architecture::MLIRGenerator()
     Linalg::MLIRGen mlir_gen(mlir_gen_fn);
     mlir_gen.genInit();
     // for (auto i = 0; i < layers.size(); i++)
-    for (auto i = 0; i < 7; i++)
+    for (auto i = 0; i < 8; i++)
     {
         layers[i].setID(i);
         if (layers[i].layer_type == Layer::Layer_Type::Input)
@@ -33,6 +33,10 @@ void Model::Architecture::MLIRGenerator()
         else if (layers[i].layer_type == Layer::Layer_Type::MaxPooling2D)
         {
             mlir_gen.genMaxPooling2DLayer(layers[i-1], layers[i]);
+        }
+        else if (layers[i].layer_type == Layer::Layer_Type::Flatten)
+        {
+            mlir_gen.genFlattenLayer(layers[i-1], layers[i]);
         }
     }
     mlir_gen.genEnd();

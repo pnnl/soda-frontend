@@ -10,14 +10,16 @@ namespace SODA_FrontEnd
 namespace Linalg
 {
 #define UNDEFINED 0
-#define ALLOC 1
-#define CMPLT 2
-#define CONV2D 3
-#define FOR 4
-#define IF 5
-#define LOAD 6
-#define MAXPOOL 7
-#define STORE 8
+#define ADDI 1
+#define ALLOC 2
+#define CMPLT 3
+#define CONV2D 4
+#define FOR 5
+#define IF 6
+#define LOAD 7
+#define MAXPOOL 8
+#define MULI 9
+#define STORE 10
 
 class MLIRDict
 {
@@ -28,6 +30,7 @@ class MLIRDict
     MLIRDict()
     {
         dict.insert({UNDEFINED, "<UNDEFINED>"});
+        dict.insert({ADDI, "addi"});
         dict.insert({ALLOC, "memref.alloc"});
         dict.insert({CMPLT, "cmpf \"olt\""});
         dict.insert({CONV2D, "linalg.conv"});
@@ -35,6 +38,7 @@ class MLIRDict
         dict.insert({IF, "scf.if"});
         dict.insert({LOAD, "memref.load"});
         dict.insert({MAXPOOL, "linalg.pooling_max"});
+        dict.insert({MULI, "muli"});
         dict.insert({STORE, "memref.store"});
     }
 

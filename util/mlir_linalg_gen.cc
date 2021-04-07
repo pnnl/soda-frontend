@@ -43,8 +43,8 @@ void MLIRGen::genInputLayer(Layer& layer)
 void MLIRGen::genConv2DLayer(Layer& prev_layer,
                              Layer& cur_layer)
 {
-    mlir << "    // Layer Type: Conv2D\n"
-         << "    // Layer Name: " << cur_layer.getName() << "\n";
+    mlir << "    // Layer type: Conv2D\n"
+         << "    // Layer name: " << cur_layer.getName() << "\n";
     auto prev_layer_id = prev_layer.getID();
     auto cur_layer_id = cur_layer.getID();
     mlir << "    // Input from layer: " << prev_layer.getName() << "\n";
@@ -187,8 +187,8 @@ void MLIRGen::genConv2DLayer(Layer& prev_layer,
 void MLIRGen::genActLayer(Layer& prev_layer,
                           Layer& cur_layer)
 {
-    mlir << "    // Layer Type: Activation\n"
-         << "    // Layer Name: " << cur_layer.getName() << "\n";
+    mlir << "    // Layer type: Activation\n"
+         << "    // Layer name: " << cur_layer.getName() << "\n";
     auto prev_layer_id = prev_layer.getID();
     auto cur_layer_id = cur_layer.getID();
     mlir << "    // Input from layer: " << prev_layer.getName() << "\n";
@@ -231,8 +231,8 @@ void MLIRGen::genActLayer(Layer& prev_layer,
 void MLIRGen::genMaxPooling2DLayer(Layer& prev_layer,
 		                   Layer& cur_layer)
 {
-    mlir << "    // Layer Type: MaxPooling2D\n"
-         << "    // Layer Name: " << cur_layer.getName() << "\n";
+    mlir << "    // Layer type: MaxPooling2D\n"
+         << "    // Layer name: " << cur_layer.getName() << "\n";
     auto prev_layer_id = prev_layer.getID();
     auto cur_layer_id = cur_layer.getID();
     mlir << "    // Input from layer: " << prev_layer.getName() << "\n";
@@ -314,6 +314,117 @@ void MLIRGen::genMaxPooling2DLayer(Layer& prev_layer,
          + kernel_memref + ", "
          + output_memref + "\n";
     mlir << code;
+    mlir << "\n";
+}
+
+void MLIRGen::genFlattenLayer(Layer& prev_layer,
+                              Layer& cur_layer)
+{
+    mlir << "    // Layer type: Flatten\n"
+         << "    // Layer name: " << cur_layer.getName() << "\n";
+    auto prev_layer_id = prev_layer.getID();
+    auto cur_layer_id = cur_layer.getID();
+    mlir << "    // Input from layer: " << prev_layer.getName() << "\n";
+    auto input_buffer_reg = layer_output_buffer[prev_layer_id];
+    mlir << "    // Input buffer: %"
+         << input_buffer_reg << " : ";
+    auto& input_shape = prev_layer.getOutputDim();
+    auto& input_dtype = prev_layer.getDataType();
+    auto input_memref = genMemRef(input_shape, input_dtype);
+    mlir << input_memref << "\n";
+
+    // Determine output size
+    auto &cur_layer_dtype = cur_layer.getDataType();
+    unsigned out_size = 1;
+    for (auto dim : input_shape) { out_size *= dim; }
+    mlir << "    // Output size: " << out_size << "\n";
+    std::vector<unsigned> out_dim = {out_size};
+    layer_output_buffer.push_back(global_register_tracker);
+    cur_layer.setOutputDim(out_dim);
+
+    auto out_buffer_reg = global_register_tracker++;
+    std::string out_memref = genMemRef(out_dim, cur_layer_dtype);
+    std::string code = "    %" + std::to_string(out_buffer_reg)
+                    + " = "
+                    + dict[ALLOC]
+                    + "() : "
+                    + out_memref;
+    mlir << code << "\n";
+
+    // Generate flatten function
+    code = "";
+    int num_of_loops = input_shape.size();
+    
+    // Gen loop statement
+    for (auto i = 0; i < num_of_loops; i++)
+    {
+        std::string one_loop = 
+            std::string(4 + i * 2, ' ')
+            + dict[FOR] 
+            + " %" + index_str[i] + " = 0 to " 
+            + std::to_string(input_shape[i])
+            + " step 1\n"
+            + std::string(4 + i * 2, ' ') + "{\n";
+        code += one_loop; 
+    }
+
+    
+    // Gen loading
+    auto load_str = std::string(4 + num_of_loops * 2, ' ')
+                  + "\%ld_val = "
+                  + genLoad(input_buffer_reg, 
+                            0, 
+                            num_of_loops - 1,
+                            input_memref) + "\n\n";
+    code += load_str;
+
+    // Gen output index
+    code += (std::string(4 + num_of_loops * 2, ' ')
+            + "\%index = addi \%zero, \%zero : i32\n\n");
+    for (auto i = 0; i < num_of_loops - 1; i++)
+    {
+        auto size = 1;
+        for (auto j = i + 1; j < num_of_loops; j++)
+        {
+            size *= input_shape[j];
+        }
+
+        code += (std::string(4 + num_of_loops * 2, ' ')
+                + "\%index_tmp  = "
+                + dict[MULI] + " "
+                + "%" + index_str[i] + ", "
+                + std::to_string(size) + " : i32\n"); 
+
+        code +=  (std::string(4 + num_of_loops * 2, ' ')
+                + "\%index = "
+                + dict[ADDI] + " "
+                + "\%index_tmp, "
+                + "\%index" + " : i32\n\n");
+    }
+    code +=  (std::string(4 + num_of_loops * 2, ' ')
+             + "\%index = "
+             + dict[ADDI] + " "
+             + "%" + index_str[num_of_loops - 1] + ", "
+             + "\%index" + " : i32\n\n");
+
+    
+
+    // Gen store
+    code += (std::string(4 + num_of_loops * 2, ' ') + 
+            dict[STORE] + " \%ld_val, %" +
+            std::to_string(out_buffer_reg) + "[\%index] : " + 
+            out_memref + "\n");
+
+    // Gen loop end
+    for (auto i = num_of_loops - 1; i >= 0; i--)
+    {
+        std::string one_loop = 
+            std::string(4 + i * 2, ' ') + "}\n";
+        code += one_loop; 
+    }
+
+    mlir << code << "\n";
+
     mlir << "\n";
 }
 
