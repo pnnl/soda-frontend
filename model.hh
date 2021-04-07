@@ -66,7 +66,8 @@ class Model
         // Activation type
         enum class Activation : int
         {
-            relu
+            relu,
+            softmax
         }activation = Activation::relu;
 
         // Padding type of the layer, used for CONV2D
@@ -100,6 +101,7 @@ class Model
         void setActivation(std::string &_act)
         {
             if (_act == "relu") { activation = Activation::relu; }
+            else if(_act == "softmax") {activation = Activation::softmax; }
         }
         auto &getActivation() { return activation; }
 
@@ -219,7 +221,13 @@ class Model
                 }
                 else if (type == Layer::Layer_Type::Activation) 
                 { 
-                    std::cout << "Layer type: Activation" << std::endl; 
+                    std::cout << "Layer type: Activation";
+                    if(layer.activation == Layer::Activation::relu)
+                        std::cout << ", Activation Type: relu" << std::endl;
+                    else if(layer.activation == Layer::Activation::softmax)
+                        std::cout << ", Activation Type: softmax" << std::endl;
+                    else 
+                        std::cout << std::endl;
                     std::cout << "Output Dims: ";
                     auto &output_dims = layer.getOutputDim();
                     for (auto dim : output_dims) { std::cout << dim << " "; }

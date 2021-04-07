@@ -74,7 +74,7 @@ def l_model(width, height, depth, NB_CLASS):
 
     # second set of CONV => RELU => POOL layers
 
-    model.add(Conv2D(16, (5, 5),  use_bias=False))
+    model.add(Conv2D(16, (5, 5),  use_bias=False, padding="same"))
 
     model.add(Activation("relu"))
 
