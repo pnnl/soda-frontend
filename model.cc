@@ -15,7 +15,7 @@ void Model::Architecture::MLIRGenerator()
     Linalg::MLIRGen mlir_gen(mlir_gen_fn);
     mlir_gen.genInit();
     // for (auto i = 0; i < layers.size(); i++)
-    for (auto i = 0; i < 9; i++)
+    for (auto i = 0; i < 12; i++)
     {
         layers[i].setID(i);
         if (layers[i].layer_type == Layer::Layer_Type::Input)
@@ -28,7 +28,10 @@ void Model::Architecture::MLIRGenerator()
         }
         else if (layers[i].layer_type == Layer::Layer_Type::Activation)
         {
-            mlir_gen.genActLayer(layers[i-1], layers[i]);
+            if(layers[i].activation == Layer::Activation::relu)
+                mlir_gen.genActLayer(layers[i-1], layers[i]);
+            else if(layers[i].activation == Layer::Activation::softmax)
+                mlir_gen.genSoftMaxLayer(layers[i-1], layers[i]);
         }
         else if (layers[i].layer_type == Layer::Layer_Type::MaxPooling2D)
         {
@@ -58,6 +61,7 @@ void Model::loadArch(std::string &arch_file)
         BOOST_FOREACH(boost::property_tree::ptree::value_type &v,
                       pt.get_child("config.layers"))
         {
+            std::cout << " -- layer_counter: " << layer_counter << std::endl; 
             // We need to construct the input layer first
             // Sometimes, input layer is not explicitly specified. 
             // When the input layer is explicitly specified, 

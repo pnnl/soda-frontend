@@ -154,6 +154,7 @@ class Model
             output_dims = _dims;
         }
         auto& getOutputDim() { return output_dims; }
+        auto& getWeightDim() { return w_dims;}
     };
 
     // Model - Architecture

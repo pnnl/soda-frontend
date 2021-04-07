@@ -2,6 +2,7 @@
 
 #include <cassert>
 #include <cmath>
+#include <cassert>
 namespace SODA_FrontEnd
 {
 namespace Linalg
@@ -584,6 +585,18 @@ void MLIRGen::genDenseLayer(Layer& prev_layer,
     mlir << code;
 
     mlir << "\n";
+}
+
+void MLIRGen::genSoftMaxLayer(Layer& prev_layer,
+                          Layer& cur_layer)
+{
+    auto& input_shape = prev_layer.getOutputDim();
+    std::vector<unsigned> output_shape; 
+
+    for(auto i : input_shape)
+        output_shape.push_back(i);
+    cur_layer.setOutputDim(output_shape);
+    // std::cout << " -- Layer Name: " << cur_layer.name << std::endl;
 }
 
 void MLIRGen::genEnd()

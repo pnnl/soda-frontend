@@ -49,12 +49,12 @@ class MLIRGen
                      Layer& cur_layer);
     void genMaxPooling2DLayer(Layer& prev_layer,
                               Layer& cur_layer);
-
     void genFlattenLayer(Layer& prev_layer,
-                         Layer& cur_layer);
-
+                              Layer& cur_layer);
     void genDenseLayer(Layer& prev_layer,
-                       Layer& cur_layer);
+                              Layer& cur_layer);
+    void genSoftMaxLayer(Layer& prev_layer,
+                              Layer& cur_layer);
 
     void genEnd();
 
