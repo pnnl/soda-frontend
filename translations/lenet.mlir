@@ -159,6 +159,27 @@ func @main() -> ()
       }
     }
 
+    // Layer type: Dense
+    // Layer name: dense
+    // Input from layer: flatten
+    // Input buffer: %9 : memref<400xf32>
+    // Kernel dim.: 400 500 
+    // Output size: 500
+    %10 = memref.alloc() : memref<400x500xf32>
+    %11 = memref.alloc() : memref<500xf32>
+
+    scf.for %a = 0 to 500 step 1
+    {
+      %out_val = addi %zero, %zero : i32
+      scf.for %b = 0 to 400 step 1
+      {
+        %w_val = memref.load %10[%b, %a] : memref<400x500xf32>
+        %in_val = memref.load %9[%b] : memref<400xf32>
+        %out_tmp = mulf %in_val, %w_val : f32
+        %out_val = addf %out_val, %out_tmp : f32
+      }
+      memref.store %out_val, %11[%a] : memref<500xf32>
+    }
 
     return;
 }

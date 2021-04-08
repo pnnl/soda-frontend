@@ -27,12 +27,12 @@ class MLIRGen
     MLIRDict dict;
 
   protected:
-    std::vector<std::string> index_str;
+    std::vector<std::string> default_index_str;
 
   public:
     MLIRGen(std::string &_fn) 
     { 
-        index_str = 
+        default_index_str = 
             {"a", "b", "c", "d", "e", "f", "g", "h", "i",
              "j", "k", "l", "m", "n", "o", "p", "q", "r",
              "s", "t", "u", "v", "w", "x", "y", "z"};
@@ -53,6 +53,9 @@ class MLIRGen
     void genFlattenLayer(Layer& prev_layer,
                          Layer& cur_layer);
 
+    void genDenseLayer(Layer& prev_layer,
+                       Layer& cur_layer);
+
     void genEnd();
 
   protected:
@@ -71,13 +74,32 @@ class MLIRGen
                         std::string&,
                         std::string&);
 
-    std::string genLoad(unsigned,unsigned,unsigned,std::string&);
+    std::string genLoad(std::vector<std::string>&,
+                        unsigned,
+                        unsigned,
+                        unsigned,
+                        std::string&);
 
-    std::string genStore(std::string&,unsigned,unsigned,unsigned,std::string&);
+    std::string genStore(std::vector<std::string>&,
+                         std::string&,
+                         unsigned,
+                         unsigned,
+                         unsigned,
+                         std::string&);
+
+    std::string genAdd(std::string&,
+                       std::string&,
+                       std::string&,
+                       Layer::Data_Type&);
+
+    std::string genMult(std::string&,
+                        std::string&,
+                        std::string&,
+                        Layer::Data_Type&);
 
     std::string genZeroF()
     {
-        return "%zero = constant 0.00000e+00 : f32";
+        return "\%zero = constant 0.00000e+00 : f32";
     }
 };
 }

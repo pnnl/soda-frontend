@@ -55,6 +55,7 @@ class Model
         std::string name; // Name of the layer
         auto &getName() { return name; }
 
+        // TODO, tensor/memref consts, check, pre-initialization
         // weights/biases for CONV2D/Dense
         std::vector<unsigned> w_dims; // dims of the weights
         std::vector<float> weights; // all the weight
