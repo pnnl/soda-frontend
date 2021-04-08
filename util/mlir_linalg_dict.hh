@@ -22,6 +22,13 @@ namespace Linalg
 #define MULF 10
 #define MULI 11
 #define STORE 12
+#define CONSTANT 13 
+#define INDEX 14
+#define FILLVAR 15
+#define EXP 16 
+#define YIELD 17
+#define ADDF 18
+#define DIVF 19
 
 class MLIRDict
 {
@@ -44,6 +51,13 @@ class MLIRDict
         dict.insert({MULF, "mulf"});
         dict.insert({MULI, "muli"});
         dict.insert({STORE, "memref.store"});
+        dict.insert({CONSTANT, "constant"});
+        dict.insert({INDEX, "index"});
+        dict.insert({FILLVAR, "linalg.fill"});
+        dict.insert({EXP, "math.exp"});
+        dict.insert({YIELD, "scf.yield"});
+        dict.insert({ADDF, "addf"});
+        dict.insert({DIVF, "divf"});
     }
 
     std::string& operator[](unsigned opr)

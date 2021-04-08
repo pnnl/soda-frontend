@@ -21,6 +21,9 @@ class MLIRGen
     // Need to track of register ID assignment
     uint64_t global_register_tracker = 0;
     // Track the output buffer ID of each layer
+    
+    // TODO: global array of constant values 
+    // TODO: global tmp variable count; 
     std::vector<uint64_t> layer_output_buffer;
 
     // dictionary
@@ -96,6 +99,41 @@ class MLIRGen
                         std::string&,
                         std::string&,
                         Layer::Data_Type&);
+    std::string genSoftMax(unsigned,
+                          std::vector<unsigned>&,
+                          std::string&,
+                          std::string&);
+    // std::string genLoad(unsigned,unsigned,unsigned,std::string&);
+
+    // std::string genStore(std::string&,unsigned,unsigned,unsigned,std::string&);
+    std::string genExp(unsigned,
+                       unsigned,
+                       std::vector<unsigned>&,
+                       std::string&, 
+                       std::string&);
+    std::string genNormReduceSum(unsigned res_buf, 
+                                 unsigned exp_buf, 
+                                 unsigned row_buf,
+                                 std::vector<unsigned> &shape, 
+                                 std::string &shape2d_memref,
+                                 std::string &shape1d_memref,
+                                 std::string &dtype);
+    std::string genReduceSum1D(unsigned exp_buf,
+                               unsigned row_buf, 
+                               std::vector<unsigned> &shape,
+                               unsigned loop_lvl_cnt,
+                               std::string &shape2d_memref,
+                               std::string &shape1d_memref,
+                               std::string &dtype,
+                               std::string &sum_var);
+    std::string genExpNorm(unsigned res_buf, 
+                           unsigned exp_buf, 
+                           std::vector<unsigned> &shape, 
+                           unsigned loop_lvl_cnt,
+                           std::string &shape2d_memref,
+                           std::string &dtype,
+                           std::string &sum_var);      
+                                
 
     std::string genZeroF()
     {

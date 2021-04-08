@@ -590,12 +590,116 @@ void MLIRGen::genDenseLayer(Layer& prev_layer,
 void MLIRGen::genSoftMaxLayer(Layer& prev_layer,
                           Layer& cur_layer)
 {
-    auto& input_shape = prev_layer.getOutputDim();
-    std::vector<unsigned> output_shape; 
 
-    for(auto i : input_shape)
-        output_shape.push_back(i);
-    cur_layer.setOutputDim(output_shape);
+    mlir << "    // Layer type: Activation\n"
+         << "    // Layre name: " << cur_layer.getName() << "\n";
+    auto prev_layer_id = prev_layer.getID();
+    auto cur_layer_id = cur_layer.getID();
+    mlir << "    // Input from layer: " << prev_layer.getName() << "\n";
+    auto input_buffer_reg = layer_output_buffer[prev_layer_id];
+    mlir << "    // Input buffer: %"
+         << input_buffer_reg << " : ";
+    auto& input_shape = prev_layer.getOutputDim();
+    auto& input_dtype = prev_layer.getDataType();
+    auto input_memref = genMemRef(input_shape, input_dtype);
+    mlir << input_memref << "\n";
+
+    // Output shape reminds the same
+    mlir << "    // Output buffer: %"
+         << input_buffer_reg << " : "
+         << input_memref << "\n";
+    cur_layer.setOutputDim(input_shape);
+
+    // layer_output_buffer.push_back(input_buffer_reg);
+    std::string code;
+    if (cur_layer.getActivation() == Layer::Activation::softmax)
+    {
+        mlir << "    // Activation: softmax\n";
+        std::string cur_layer_dtype;
+        if (cur_layer.getDataType() == Layer::Data_Type::f32)
+        {
+            cur_layer_dtype = "f32";
+        }
+        
+        // Gen Exp
+        auto temp_memref =  genMemRef(input_shape, input_dtype);
+        code += "    // tmp buffer for exp eval \n";
+        auto tmp_exp_reg = global_register_tracker;
+        code += "    \%" + std::to_string(tmp_exp_reg)
+                + " = "
+                + dict[ALLOC]
+                + "() : "
+                + temp_memref
+                + "\n"
+                ;
+        global_register_tracker++;
+
+        auto res_reg = global_register_tracker;
+        code += "    // buffer for result of softmax (exp norm) \n";
+        code += "    \%" + std::to_string(res_reg)
+                + " = "
+                + dict[ALLOC]
+                + "() : "
+                + temp_memref
+                + "\n"
+                ;
+        global_register_tracker++;
+
+        // constant value
+        // TODO: Global constant tracker?
+        code += "    \%c0 = "
+                + dict[CONSTANT]
+                + " 0.0 :"
+                + cur_layer_dtype
+                + "\n"
+                ;
+
+        code += "    " + dict[FILLVAR]
+                + "(\%" 
+                + std::to_string(tmp_exp_reg)
+                + ", \%c0) : "
+                + temp_memref
+                + ", "
+                + cur_layer_dtype
+                + "\n"
+                ; 
+
+        code += "    " + dict[FILLVAR]
+                + "(\%" 
+                + std::to_string(res_reg)
+                + ", \%c0) : "
+                + temp_memref
+                + ", "
+                + cur_layer_dtype
+                + "\n"
+                ; 
+        // code += " /* -- InputBuffer : " + std::to_string(input_buffer_reg) + "*/ \n";
+        code += genExp(input_buffer_reg, tmp_exp_reg
+                    , input_shape, temp_memref, cur_layer_dtype);
+
+        // Reduce Sum
+        std::vector<unsigned> col_shape; 
+        col_shape.push_back(input_shape[1]);
+        // std::cout << " -- TEST 1" << std::endl;
+        auto temp_memref2 = genMemRef(col_shape, input_dtype);
+        // std::cout << " -- TEST 2" << std::endl;
+        auto tmp_col_reg = global_register_tracker;
+        code += "    \%" + std::to_string(tmp_col_reg)
+                + " = "
+                + dict[ALLOC]
+                + "() : "
+                + temp_memref2
+                + "\n"
+                ;
+        global_register_tracker++;
+        // std::cout << " -- TEST 3" << std::endl;
+        code += genNormReduceSum(res_reg, tmp_exp_reg, tmp_col_reg, 
+                            input_shape, temp_memref, temp_memref2, cur_layer_dtype);
+        // std::cout << " -- TEST 4" << std::endl;
+    }
+    mlir << code;
+    mlir << "\n";
+
     // std::cout << " -- Layer Name: " << cur_layer.name << std::endl;
 }
 
@@ -733,7 +837,10 @@ std::string MLIRGen::genRelu(unsigned buffer_id,
     auto load_str = std::string(4 + num_of_loops * 2, ' ')
                   + "%tmp = "
                   + genLoad(default_index_str, 
-                    buffer_id, 0, num_of_loops - 1, shape_memref) + "\n";
+                    // buffer_id, 0, num_of_loops - 1, shape_memref) + "\n";
+                    buffer_id, 0, num_of_loops, shape_memref) + "\n";
+                //   + genLoad(buffer_id, 0, num_of_loops - 1, shape_memref) + "\n";
+                //   + genLoad(buffer_id, 0, num_of_loops, shape_memref) + "\n";
     ret += load_str;
 
     // Gen zero
@@ -755,7 +862,10 @@ std::string MLIRGen::genRelu(unsigned buffer_id,
             std::string(4 + num_of_loops * 2, ' ') + "{\n" +
             std::string(4 + (num_of_loops + 1) * 2, ' ') +
             genStore(default_index_str,
-                zero, buffer_id, 0, num_of_loops - 1, shape_memref) + "\n" +
+                // zero, buffer_id, 0, num_of_loops - 1, shape_memref) + "\n" +
+                zero, buffer_id, 0, num_of_loops, shape_memref) + "\n" +
+            // genStore(zero, buffer_id, 0, num_of_loops - 1, shape_memref) + "\n" +
+            // genStore(zero, buffer_id, 0, num_of_loops, shape_memref) + "\n" +
             std::string(4 + num_of_loops * 2, ' ') + "}\n");
 
     // Gen loop end
@@ -769,19 +879,54 @@ std::string MLIRGen::genRelu(unsigned buffer_id,
 }
 
 // TODO, this function is not generic enough
+// std::string MLIRGen::genExp(unsigned buffer_id,
+//                              std::vector<unsigned> &shape,
+//                              std::string &shape_memref,
+//                              std::string &dtype)
+// {
+
+// }
+
+std::string MLIRGen::genSoftMax(unsigned buffer_id,
+                             std::vector<unsigned> &shape,
+                             std::string &shape_memref,
+                             std::string &dtype)
+{
+    std::string ret; 
+    int num_of_loops = shape.size();
+    // auto &cur_layer_dtype = cur_layer.getDataType();
+
+    // Gen Exptmp
+    // auto temp_memref = genMemRef(shape, dtype);
+    // std::string code = "\%expt = "
+    //                 //  + " = "
+    //                  + dict[ALLOC]
+    //                  + "() : "
+    //                  + temp_memref 
+    //                  + "\n"
+    //                  ;
+    // mlir << code; 
+    mlir << "\n";
+}
+
 std::string MLIRGen::genLoad(std::vector<std::string> &index_str,
                              unsigned buffer_id,
+// std::string MLIRGen::genLoad(unsigned buffer_id,
                              unsigned index_start,
                              unsigned index_end,
                              std::string& mem_ref)
 {
     std::string ret = dict[LOAD] + " %" + std::to_string(buffer_id) + "[";
-    for (auto i = index_start; i < index_end; i++)
+    for (int i = index_start; i < index_end; i++)
     {
-        ret += ("%" + index_str[i] + ", ");
+        ret += ("%" + index_str[i]);
+        if ((index_end - 1) > i) 
+            ret += (", ");
+        else 
+            ret += ("] ");
     }
-    ret += ("%" + index_str[index_end] + "] : " + mem_ref);
-
+    // ret += ("%" + index_str[index_end] + "] : " + mem_ref);
+    ret += (" : " + mem_ref);
     return ret;
 }
 
@@ -795,11 +940,16 @@ std::string MLIRGen::genStore(std::vector<std::string> &index_str,
 {
     std::string ret = dict[STORE] + " " + val + ", "
                     + "%" + std::to_string(buffer_id) + "[";
-    for (auto i = index_start; i < index_end; i++)
+    for (int i = index_start; i < index_end; i++)
     {
-        ret += ("%" + index_str[i] + ", ");
+        ret += ("%" + index_str[i]); 
+        if ((index_end - 1) > i) 
+            ret += (", ");
+        else 
+            ret += ("] ");
     }
-    ret += ("%" + index_str[index_end] + "] : " + mem_ref);
+    // ret += ("%" + index_str[index_end] + "] : " + mem_ref);
+    ret += (" : " + mem_ref);
 
     return ret;
 }
@@ -870,9 +1020,280 @@ std::string MLIRGen::genMult(std::string& out_reg,
                     + opr_1 + ", "
                     + opr_2 + " : " + post_fix);
 
-
     return ret;
 }
+
+std::string MLIRGen::genExp(unsigned buffer_id,
+                            unsigned res_buffer_id,
+                            std::vector<unsigned> &shape,
+                            std::string &shape_memref,
+                            std::string &dtype)
+{
+    std::string res;
+    std::cout << " -- Res_buffer_id " << res_buffer_id << std::endl;
+    // res += " /* -- InputBuffer : " + std::to_string(buffer_id) + "*/ \n";
+    // Loop body begin: 
+    for (auto i = 0; i < shape.size(); ++i)
+    {
+        std::string loop_nest = 
+            std::string(4 + i * 2, ' ')
+                + dict[FOR] 
+                + " %" + index_str[i] + " = 0 to " 
+                + std::to_string(shape[i])
+                + " step 1\n"
+                + std::string(4 + i * 2, ' ') + "{\n";
+            res += loop_nest;    
+    }
+
+    // Load val 
+    std::string tmp_v_str = "%tmp";
+    auto load_str = std::string(4 + shape.size() * 2, ' ')
+                  + tmp_v_str+ " = "
+                //   + genLoad(buffer_id, 0, shape.size() - 1, shape_memref) + "\n";
+                  + genLoad(buffer_id, 0, shape.size(), shape_memref) + "\n";
+    res += load_str;
+    // Eval exp
+    std::string eval_v_str = "eval";
+    auto exp_eval_str = std::string(4 + shape.size() * 2, ' ')
+                  + "%" + eval_v_str + " = "
+                  + dict[EXP]
+                  + " %tmp : "
+                  + dtype
+                  + "\n"
+                  ;
+    res +=  exp_eval_str;
+    // Store val
+    auto store_str = std::string(4 + shape.size() * 2, ' ') 
+                //   + genStore(eval_v_str, res_buffer_id, 0, shape.size() - 1, shape_memref ) 
+                  + genStore(eval_v_str, res_buffer_id, 0, shape.size(), shape_memref ) 
+                  + "\n";
+    res += store_str; 
+
+    // res += " /* -- Shape.size : " + std::to_string(shape.size()) + "*/ \n";
+    // Loop body end
+    for (int i = shape.size() - 1; i >= 0; i--)
+    {
+        std::string loop_nest = 
+            std::string(4 + i * 2, ' ') + "}\n";
+        res += loop_nest; 
+    }
+    res += "\n";
+    return res;
+}
+
+std::string MLIRGen::genNormReduceSum(unsigned res_buf, 
+                                      unsigned exp_buf, 
+                                      unsigned row_buf,
+                                      std::vector<unsigned> &shape, 
+                                      std::string &shape2d_memref,
+                                      std::string &shape1d_memref,
+                                      std::string &dtype)
+{
+    std::string res = "";
+    unsigned loop_lvl_cnt = 0; 
+    // std::cout << " -- " << index_str[loop_lvl_cnt] << std::endl;
+    // std::cout << " -- " << dict[FOR] << std::endl;
+    std::string outer_lp_begin =  std::string(4 + loop_lvl_cnt * 2, ' ')
+                                   + dict[FOR]
+                                   + " %" + index_str[loop_lvl_cnt] + " = 0 to "
+                                   + std::to_string(shape[loop_lvl_cnt])
+                                   + " step 1 {\n"
+                                   ;
+    loop_lvl_cnt += 1; 
+    // std::cout << " -- " <<  loop_nest_out_begin << std::endl;
+    res += outer_lp_begin;
+    std::vector<unsigned> shape_inner (1, shape[1]);
+    std::string sum_ = "%sum";
+    std::string sum_row = genReduceSum1D(exp_buf, row_buf, shape_inner, loop_lvl_cnt, 
+                            shape2d_memref, shape1d_memref, dtype, sum_);
+    res += sum_row;
+
+    std::string exp_norm = genExpNorm(res_buf, exp_buf, shape_inner, loop_lvl_cnt, 
+                            shape2d_memref, dtype, sum_);
+    res += exp_norm;
+
+    // close outer loop 
+    loop_lvl_cnt -= 1; 
+    std::string outer_lp_close = std::string(4 + loop_lvl_cnt * 2, ' ') + "}\n";
+    res += outer_lp_close;
+
+    return res; 
+}
+
+std::string MLIRGen::genReduceSum1D(unsigned exp_buf,
+                           unsigned row_buf, 
+                           std::vector<unsigned> &shape,
+                           unsigned p_loop_lvl_cnt,
+                           std::string &shape2d_memref,
+                           std::string &shape1d_memref,
+                           std::string &dtype,
+                           std::string &sum_var)
+{
+    std::string res = "";
+    // loop begin
+    unsigned space_scaling = p_loop_lvl_cnt;
+    for (auto i = 0; i < shape.size(); i++)
+    {
+        space_scaling += 1; 
+        std::string loop_nest =  std::string(4 +  space_scaling * 2, ' ')
+                                + dict[FOR]
+                                + " %" + index_str[p_loop_lvl_cnt] + " = 0 to "
+                                + std::to_string(shape[i])
+                                + " step 1 {\n"
+                                ;
+        res += loop_nest;                        
+    }
+
+    // Load unit data
+    space_scaling += 1;
+    std::string rstmp = "%rstmp";
+    auto load_str = std::string(4 + space_scaling * 2, ' ')
+                    + rstmp 
+                    + " = "
+                    // TODO: Make it more generic
+                    + genLoad(exp_buf, 0, 1, shape2d_memref) + "\n";
+    res += load_str;
+
+    // Store data to temp row_vector 
+    auto store_str = std::string(4 + space_scaling * 2, ' ')
+                    // TODO: Fix this hard coded part. 
+                    // + genStore(rstmp, row_buf, 1, shape.size(), shape1d_memref)
+                    + genStore(rstmp, row_buf, 1, 2, shape1d_memref)
+                    + "\n"
+                    ;
+    res += store_str;
+
+    // loop end 
+    for ( int i = shape.size() - 1; i >=0; i--)
+    {
+        space_scaling -= 1;
+        std::string loop_nest = std::string(4 + space_scaling * 2, ' ') + "}\n";
+        res += loop_nest;
+    }
+
+    // std::string sum_var = "%sum"; 
+    std::string sum_init = "%sum_init";
+    std::string sum_itr = "%sum_itr";
+    std::string sum_new = "%sum_new";
+    std::string stmp    = "%stmp";
+    res += std::string(4 + space_scaling * 2, ' ') 
+           + sum_var 
+           + " = "
+           + dict[FOR] 
+           // TODO: Fix hard coded values
+           + " %" + index_str[0] + " = 0 to "
+           + std::to_string(shape[0]) 
+           + " step 1\n"
+           ; 
+
+        space_scaling += 1; 
+        res += std::string(4 + space_scaling * 2, ' ') 
+               + "iter_args(" 
+               + sum_itr 
+               + " = "
+               + sum_init 
+               + ") -> "
+               + dtype
+               + " {\n"
+               ;
+        // load value for addition
+        res += std::string(4 + space_scaling * 2, ' ')
+                + stmp 
+                + " = "
+                + genLoad(row_buf, 0, shape.size(), shape1d_memref)
+                + " \n"
+                ;
+        // addition 
+        res += std::string(4 + space_scaling * 2, ' ') 
+                + sum_new 
+                + " = "
+                + dict[ADDF] + " "
+                + sum_itr + ", "
+                + stmp 
+                + " : "
+                + dtype 
+                + "\n"
+                ;
+        res += std::string(4 + space_scaling * 2, ' ')
+                + dict[YIELD] + " "
+                + sum_new 
+                + " : "
+                + dtype 
+                + "\n"
+                ;
+
+        // close sum scope
+        space_scaling -= 1;
+        res += std::string(4 + space_scaling * 2, ' ') + "}\n"; 
+        
+    return res;
+}
+
+std::string MLIRGen::genExpNorm(unsigned res_buf, 
+                               unsigned exp_buf, 
+                               std::vector<unsigned> &shape, 
+                               unsigned p_loop_lvl_cnt,
+                               std::string &shape2d_memref,
+                               std::string &dtype,
+                               std::string &sum_var)
+{
+    std::string res = "";
+    // std::cout << " -- LoopLevel: " << loop_lvl_cnt << std::endl; 
+    // loop begin
+    unsigned space_scaling = p_loop_lvl_cnt;
+    for (auto i = 0; i < shape.size(); i++)
+    {
+        space_scaling += 1; 
+        std::string loop_nest =  std::string(4 +  space_scaling * 2, ' ')
+                                + dict[FOR]
+                                + " %" + index_str[p_loop_lvl_cnt] + " = 0 to "
+                                + std::to_string(shape[i])
+                                + " step 1 {\n"
+                                ;
+        res += loop_nest;                        
+    }
+    
+    // load variable 
+    space_scaling += 1;
+    std::string tnorm1 = "%tnorm1";
+    std::string load_exp = std::string(4 + space_scaling * 2, ' ')
+                            + tnorm1
+                            + " = "
+                            // TODO: Make it more generic
+                            + genLoad(exp_buf, 0, 2, shape2d_memref)
+                            + "\n"
+                            ;
+    res += load_exp;
+    
+    // get norm value 
+    std::string tnorm2 = "%tnorm2";
+    std::string norm_val = std::string(4 + space_scaling * 2, ' ')
+                            + tnorm2
+                            + " = "
+                            + dict[DIVF] + " "
+                            + tnorm1 
+                            + ", "
+                            + sum_var
+                            + " : "
+                            + dtype 
+                            + "\n"
+                            ;
+
+    res += norm_val; 
+    // store value to result buf
+    std::string store_res = std::string(4 + space_scaling * 2, ' ')
+                            + genStore(tnorm2, res_buf, 0, 2, shape2d_memref)
+                            + " \n"
+                            ; 
+    res += store_res;
+    
+    // close norm loop scope
+    space_scaling -= 1; 
+    res += std::string(4 + space_scaling * 2, ' ') + "}\n";
+
+    return res; 
+}                              
+
 }
 }
 
