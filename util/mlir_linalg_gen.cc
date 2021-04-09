@@ -376,8 +376,9 @@ void MLIRGen::genFlattenLayer(Layer& prev_layer,
                   + "\%ld_val = "
                   + genLoad(default_index_str,
                             input_buffer_reg, 
-                            0, 
-                            num_of_loops - 1,
+                            0,
+                            num_of_loops, 
+                            // num_of_loops - 1,
                             input_memref) + "\n\n";
     code += load_str;
 
@@ -919,7 +920,7 @@ std::string MLIRGen::genLoad(std::vector<std::string> &index_str,
     std::string ret = dict[LOAD] + " %" + std::to_string(buffer_id) + "[";
     for (int i = index_start; i < index_end; i++)
     {
-        ret += ("%" + index_str[i]);
+        ret += ("%" + default_index_str[i]);
         if ((index_end - 1) > i) 
             ret += (", ");
         else 
@@ -942,7 +943,7 @@ std::string MLIRGen::genStore(std::vector<std::string> &index_str,
                     + "%" + std::to_string(buffer_id) + "[";
     for (int i = index_start; i < index_end; i++)
     {
-        ret += ("%" + index_str[i]); 
+        ret += ("%" + default_index_str[i]); 
         if ((index_end - 1) > i) 
             ret += (", ");
         else 
@@ -1038,7 +1039,7 @@ std::string MLIRGen::genExp(unsigned buffer_id,
         std::string loop_nest = 
             std::string(4 + i * 2, ' ')
                 + dict[FOR] 
-                + " %" + index_str[i] + " = 0 to " 
+                + " %" + default_index_str[i] + " = 0 to " 
                 + std::to_string(shape[i])
                 + " step 1\n"
                 + std::string(4 + i * 2, ' ') + "{\n";
@@ -1050,7 +1051,11 @@ std::string MLIRGen::genExp(unsigned buffer_id,
     auto load_str = std::string(4 + shape.size() * 2, ' ')
                   + tmp_v_str+ " = "
                 //   + genLoad(buffer_id, 0, shape.size() - 1, shape_memref) + "\n";
-                  + genLoad(buffer_id, 0, shape.size(), shape_memref) + "\n";
+                  + genLoad(default_index_str, 
+                            buffer_id, 
+                            0, 
+                            shape.size(), 
+                            shape_memref) + "\n";
     res += load_str;
     // Eval exp
     std::string eval_v_str = "eval";
@@ -1065,7 +1070,12 @@ std::string MLIRGen::genExp(unsigned buffer_id,
     // Store val
     auto store_str = std::string(4 + shape.size() * 2, ' ') 
                 //   + genStore(eval_v_str, res_buffer_id, 0, shape.size() - 1, shape_memref ) 
-                  + genStore(eval_v_str, res_buffer_id, 0, shape.size(), shape_memref ) 
+                  + genStore(default_index_str, 
+                            eval_v_str, 
+                            res_buffer_id, 
+                            0, 
+                            shape.size(), 
+                            shape_memref ) 
                   + "\n";
     res += store_str; 
 
@@ -1095,7 +1105,7 @@ std::string MLIRGen::genNormReduceSum(unsigned res_buf,
     // std::cout << " -- " << dict[FOR] << std::endl;
     std::string outer_lp_begin =  std::string(4 + loop_lvl_cnt * 2, ' ')
                                    + dict[FOR]
-                                   + " %" + index_str[loop_lvl_cnt] + " = 0 to "
+                                   + " %" + default_index_str[loop_lvl_cnt] + " = 0 to "
                                    + std::to_string(shape[loop_lvl_cnt])
                                    + " step 1 {\n"
                                    ;
@@ -1137,7 +1147,7 @@ std::string MLIRGen::genReduceSum1D(unsigned exp_buf,
         space_scaling += 1; 
         std::string loop_nest =  std::string(4 +  space_scaling * 2, ' ')
                                 + dict[FOR]
-                                + " %" + index_str[p_loop_lvl_cnt] + " = 0 to "
+                                + " %" + default_index_str[p_loop_lvl_cnt] + " = 0 to "
                                 + std::to_string(shape[i])
                                 + " step 1 {\n"
                                 ;
@@ -1151,14 +1161,24 @@ std::string MLIRGen::genReduceSum1D(unsigned exp_buf,
                     + rstmp 
                     + " = "
                     // TODO: Make it more generic
-                    + genLoad(exp_buf, 0, 1, shape2d_memref) + "\n";
+                    + genLoad(default_index_str, 
+                              exp_buf, 
+                              0, 
+                              1, 
+                              shape2d_memref) 
+                    + "\n";
     res += load_str;
 
     // Store data to temp row_vector 
     auto store_str = std::string(4 + space_scaling * 2, ' ')
                     // TODO: Fix this hard coded part. 
                     // + genStore(rstmp, row_buf, 1, shape.size(), shape1d_memref)
-                    + genStore(rstmp, row_buf, 1, 2, shape1d_memref)
+                    + genStore(default_index_str, 
+                               rstmp, 
+                               row_buf, 
+                               1, 
+                               2, 
+                               shape1d_memref)
                     + "\n"
                     ;
     res += store_str;
@@ -1181,7 +1201,7 @@ std::string MLIRGen::genReduceSum1D(unsigned exp_buf,
            + " = "
            + dict[FOR] 
            // TODO: Fix hard coded values
-           + " %" + index_str[0] + " = 0 to "
+           + " %" + default_index_str[0] + " = 0 to "
            + std::to_string(shape[0]) 
            + " step 1\n"
            ; 
@@ -1200,7 +1220,11 @@ std::string MLIRGen::genReduceSum1D(unsigned exp_buf,
         res += std::string(4 + space_scaling * 2, ' ')
                 + stmp 
                 + " = "
-                + genLoad(row_buf, 0, shape.size(), shape1d_memref)
+                + genLoad(default_index_str, 
+                          row_buf, 
+                          0, 
+                          shape.size(), 
+                          shape1d_memref)
                 + " \n"
                 ;
         // addition 
@@ -1246,7 +1270,7 @@ std::string MLIRGen::genExpNorm(unsigned res_buf,
         space_scaling += 1; 
         std::string loop_nest =  std::string(4 +  space_scaling * 2, ' ')
                                 + dict[FOR]
-                                + " %" + index_str[p_loop_lvl_cnt] + " = 0 to "
+                                + " %" + default_index_str[p_loop_lvl_cnt] + " = 0 to "
                                 + std::to_string(shape[i])
                                 + " step 1 {\n"
                                 ;
@@ -1260,7 +1284,11 @@ std::string MLIRGen::genExpNorm(unsigned res_buf,
                             + tnorm1
                             + " = "
                             // TODO: Make it more generic
-                            + genLoad(exp_buf, 0, 2, shape2d_memref)
+                            + genLoad(default_index_str, 
+                                      exp_buf, 
+                                      0, 
+                                      2, 
+                                      shape2d_memref)
                             + "\n"
                             ;
     res += load_exp;
@@ -1282,7 +1310,12 @@ std::string MLIRGen::genExpNorm(unsigned res_buf,
     res += norm_val; 
     // store value to result buf
     std::string store_res = std::string(4 + space_scaling * 2, ' ')
-                            + genStore(tnorm2, res_buf, 0, 2, shape2d_memref)
+                            + genStore(default_index_str,
+                                       tnorm2, 
+                                       res_buf, 
+                                       0, 
+                                       2, 
+                                       shape2d_memref)
                             + " \n"
                             ; 
     res += store_res;

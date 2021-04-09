@@ -40,12 +40,12 @@ func @main() -> ()
         {
           scf.for %d = 0 to 6 step 1
           {
-            %tmp = memref.load %2[%a, %b, %c, %d] : memref<1x28x28x6xf32>
+            %tmp = memref.load %2[%a, %b, %c, %d]  : memref<1x28x28x6xf32>
             %zero = constant 0.00000e+00 : f32
             %cond = cmpf "olt", %tmp, %zero : f32
             scf.if %cond
             {
-              memref.store %zero, %2[%a, %b, %c, %d] : memref<1x28x28x6xf32>
+              memref.store %zero, %2[%a, %b, %c, %d]  : memref<1x28x28x6xf32>
             }
           }
         }
@@ -98,12 +98,12 @@ func @main() -> ()
         {
           scf.for %d = 0 to 16 step 1
           {
-            %tmp = memref.load %6[%a, %b, %c, %d] : memref<1x10x10x16xf32>
+            %tmp = memref.load %6[%a, %b, %c, %d]  : memref<1x10x10x16xf32>
             %zero = constant 0.00000e+00 : f32
             %cond = cmpf "olt", %tmp, %zero : f32
             scf.if %cond
             {
-              memref.store %zero, %6[%a, %b, %c, %d] : memref<1x10x10x16xf32>
+              memref.store %zero, %6[%a, %b, %c, %d]  : memref<1x10x10x16xf32>
             }
           }
         }
@@ -138,7 +138,7 @@ func @main() -> ()
         {
           scf.for %d = 0 to 16 step 1
           {
-            %ld_val = memref.load %8[%a, %b, %c, %d] : memref<1x5x5x16xf32>
+            %ld_val = memref.load %8[%a, %b, %c, %d]  : memref<1x5x5x16xf32>
 
             %index = addi %zero, %zero : i32
 
@@ -173,12 +173,90 @@ func @main() -> ()
       %out_val = addi %zero, %zero : i32
       scf.for %b = 0 to 400 step 1
       {
-        %w_val = memref.load %10[%b, %a] : memref<400x500xf32>
-        %in_val = memref.load %9[%b] : memref<400xf32>
+        %w_val = memref.load %10[%a]  : memref<400x500xf32>
+        %in_val = memref.load %9[ : memref<400xf32>
         %out_tmp = mulf %in_val, %w_val : f32
         %out_val = addf %out_val, %out_tmp : f32
       }
-      memref.store %out_val, %11[%a] : memref<500xf32>
+      memref.store %out_val, %11[ : memref<500xf32>
+    }
+
+    // Layer type: Activation
+    // Layer name: activation_2
+    // Input from layer: dense
+    // Input buffer: %11 : memref<500xf32>
+    // Output buffer: %11 : memref<500xf32>
+    // Activation: relu
+    scf.for %a = 0 to 500 step 1
+    {
+      %tmp = memref.load %11[%a]  : memref<500xf32>
+      %zero = constant 0.00000e+00 : f32
+      %cond = cmpf "olt", %tmp, %zero : f32
+      scf.if %cond
+      {
+        memref.store %zero, %11[%a]  : memref<500xf32>
+      }
+    }
+
+    // Layer type: Dense
+    // Layer name: dense_1
+    // Input from layer: activation_2
+    // Input buffer: %11 : memref<500xf32>
+    // Kernel dim.: 500 10 
+    // Output size: 10
+    %12 = memref.alloc() : memref<500x10xf32>
+    %13 = memref.alloc() : memref<10xf32>
+
+    scf.for %a = 0 to 10 step 1
+    {
+      %out_val = addi %zero, %zero : i32
+      scf.for %b = 0 to 500 step 1
+      {
+        %w_val = memref.load %12[%a]  : memref<500x10xf32>
+        %in_val = memref.load %11[ : memref<500xf32>
+        %out_tmp = mulf %in_val, %w_val : f32
+        %out_val = addf %out_val, %out_tmp : f32
+      }
+      memref.store %out_val, %13[ : memref<10xf32>
+    }
+
+    // Layer type: Activation
+    // Layre name: activation_3
+    // Input from layer: dense_1
+    // Input buffer: %13 : memref<10xf32>
+    // Output buffer: %13 : memref<10xf32>
+    // Activation: softmax
+    // tmp buffer for exp eval 
+    %14 = memref.alloc() : memref<10xf32>
+    // buffer for result of softmax (exp norm) 
+    %15 = memref.alloc() : memref<10xf32>
+    %c0 = constant 0.0 :f32
+    linalg.fill(%14, %c0) : memref<10xf32>, f32
+    linalg.fill(%15, %c0) : memref<10xf32>, f32
+    scf.for %a = 0 to 10 step 1
+    {
+      %tmp = memref.load %13[%a]  : memref<10xf32>
+      %eval = math.exp %tmp : f32
+      memref.store eval, %14[%a]  : memref<10xf32>
+    }
+
+    %16 = memref.alloc() : memref<0xf32>
+    scf.for %a = 0 to 10 step 1 {
+        scf.for %b = 0 to 0 step 1 {
+          %rstmp = memref.load %14[%a]  : memref<10xf32>
+          memref.store %rstmp, %16[%b]  : memref<0xf32>
+        }
+        %sum = scf.for %a = 0 to 0 step 1
+          iter_args(%sum_itr = %sum_init) -> f32 {
+          %stmp = memref.load %16[%a]  : memref<0xf32> 
+          %sum_new = addf %sum_itr, %stmp : f32
+          scf.yield %sum_new : f32
+        }
+        scf.for %b = 0 to 0 step 1 {
+          %tnorm1 = memref.load %14[%a, %b]  : memref<10xf32>
+          %tnorm2 = divf %tnorm1, %sum : f32
+          memref.store %tnorm2, %15[%a, %b]  : memref<10xf32> 
+        }
     }
 
     return;

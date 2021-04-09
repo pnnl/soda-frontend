@@ -27,8 +27,7 @@ namespace Linalg
 #define FILLVAR 15
 #define EXP 16 
 #define YIELD 17
-#define ADDF 18
-#define DIVF 19
+#define DIVF 18
 
 class MLIRDict
 {
@@ -56,7 +55,6 @@ class MLIRDict
         dict.insert({FILLVAR, "linalg.fill"});
         dict.insert({EXP, "math.exp"});
         dict.insert({YIELD, "scf.yield"});
-        dict.insert({ADDF, "addf"});
         dict.insert({DIVF, "divf"});
     }
 
