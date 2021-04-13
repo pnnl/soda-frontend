@@ -331,6 +331,11 @@ void MLIRGen::genFlattenLayer(Layer& prev_layer,
     mlir << "    // Input buffer: %"
          << input_buffer_reg << " : ";
     auto& input_shape = prev_layer.getOutputDim();
+
+    std::cout << "Flatten Layer Input Dim: " << std::endl; 
+    for(auto i: input_shape)
+        std::cout << i << " "; 
+    std::cout << std::endl; 
     auto& input_dtype = prev_layer.getDataType();
     auto input_memref = genMemRef(input_shape, input_dtype);
     mlir << input_memref << "\n";
@@ -338,14 +343,26 @@ void MLIRGen::genFlattenLayer(Layer& prev_layer,
     // Determine output size
     auto &cur_layer_dtype = cur_layer.getDataType();
     unsigned out_size = 1;
-    for (auto dim : input_shape) { out_size *= dim; }
-    mlir << "    // Output size: " << out_size << "\n";
+    // for (auto dim : input_shape) { out_size *= dim; }
+    std::vector<unsigned> output_shape; 
+    for (int i = 1; i < input_shape.size(); ++i)
+    {
+        out_size *= input_shape[i];
+    }
+    output_shape.push_back(input_shape[0]);
+    output_shape.push_back(out_size);
+    mlir << "    // Output size: "; 
+    for (auto d: output_shape)
+        mlir << d << " ";
+    mlir << "\n";
     std::vector<unsigned> out_dim = {out_size};
     layer_output_buffer.push_back(global_register_tracker);
-    cur_layer.setOutputDim(out_dim);
+    cur_layer.setOutputDim(output_shape);
+    // cur_layer.setOutputDim(out_dim);
 
     auto out_buffer_reg = global_register_tracker++;
-    std::string out_memref = genMemRef(out_dim, cur_layer_dtype);
+    std::string out_memref = genMemRef(output_shape, cur_layer_dtype);
+    // std::string out_memref = genMemRef(out_dim, cur_layer_dtype);
     std::string code = "    %" + std::to_string(out_buffer_reg)
                     + " = "
                     + dict[ALLOC]
@@ -418,7 +435,7 @@ void MLIRGen::genFlattenLayer(Layer& prev_layer,
     // Gen store
     code += (std::string(4 + num_of_loops * 2, ' ') + 
             dict[STORE] + " \%ld_val, %" +
-            std::to_string(out_buffer_reg) + "[\%index] : " + 
+            std::to_string(out_buffer_reg) + "[\%" + default_index_str[0]+ ",\%index] : " + 
             out_memref + "\n");
 
     // Gen loop end
@@ -453,7 +470,7 @@ void MLIRGen::genDenseLayer(Layer& prev_layer,
 
     // Determine output and kernel dimension
     auto &kernel_dim = cur_layer.getKernelDim();
-    assert(input_shape.size() == 1); // Input must be 1D
+    // assert(input_shape.size() == 1); // Input must be 1D
     mlir << "    // Kernel dim.: ";
     // weight_dim[0] - input dimension
     // weight_dim[1] - output dimension
@@ -473,7 +490,8 @@ void MLIRGen::genDenseLayer(Layer& prev_layer,
     global_register_tracker++;
 
     // alloc output
-    std::vector<unsigned> output_shape = {kernel_dim[1]};
+    std::vector<unsigned> output_shape = {input_shape[0],kernel_dim[1]};
+    // for (int i = )
     auto output_reg = global_register_tracker;
     auto output_memref = genMemRef(output_shape, cur_layer_dtype);
     code = "    %" + std::to_string(output_reg)
@@ -487,101 +505,118 @@ void MLIRGen::genDenseLayer(Layer& prev_layer,
     global_register_tracker++;
 
     // Dense function
-    code = "";
+    // code = "";
     int num_of_loops = kernel_dim.size();
-    // Gen loop statement
-    for (auto i = 0; i < num_of_loops; i++)
-    {
-        auto index = num_of_loops - 1 - i;
+    
+    // Do Matmul: 
+    code  = "    " + dict[MATMUL]
+          + " ins( %"
+          + std::to_string(input_buffer_reg)
+          + ", %"
+          + std::to_string(kernel_reg) 
+          + " :" 
+          + input_memref
+          + ", " 
+          + kernel_memref
+          + ") outs(%"
+          + std::to_string(output_reg)
+          + " :" 
+          + output_memref
+          + " )\n";
 
-        std::string one_loop = 
-            std::string(4 + i * 2, ' ')
-            + dict[FOR] 
-            + " %" + default_index_str[i] + " = 0 to " 
-            + std::to_string(kernel_dim[index])
-            + " step 1\n"
-            + std::string(4 + i * 2, ' ') + "{\n";
+    // // Gen loop statement
+    // for (auto i = 0; i < num_of_loops; i++)
+    // {
+    //     auto index = num_of_loops - 1 - i;
 
-        code += one_loop; 
-        if (i == 0)
-        {
-            code += (std::string(4 + (i + 1) * 2, ' ')
-                 + "\%out_val = " 
-                 + dict[ADDI] + " \%zero, \%zero : i32\n");
-        }
-    } 
+    //     std::string one_loop = 
+    //         std::string(4 + i * 2, ' ')
+    //         + dict[FOR] 
+    //         + " %" + default_index_str[i] + " = 0 to " 
+    //         + std::to_string(kernel_dim[index])
+    //         + " step 1\n"
+    //         + std::string(4 + i * 2, ' ') + "{\n";
 
-    // Gen load
-    std::vector<std::string> input_load_index;
-    std::vector<std::string> kernel_load_index;
-    std::vector<std::string> output_store_index;
-    for (auto i = 0; i < num_of_loops; i++)
-    {
-        auto index = num_of_loops - 1 - i;
-        if (i == 0) 
-        {
-            input_load_index.push_back(default_index_str[index]);
-        }
+    //     code += one_loop; 
+    //     if (i == 0)
+    //     {
+    //         code += (std::string(4 + (i + 1) * 2, ' ')
+    //              + "\%out_val = " 
+    //              + dict[ADDI] + " \%zero, \%zero : i32\n");
+    //     }
+    // } 
 
-        if (i == (num_of_loops -1))
-        {
-            output_store_index.push_back(default_index_str[index]);
-        }
+    // // Gen load
+    // std::vector<std::string> input_load_index;
+    // std::vector<std::string> kernel_load_index;
+    // std::vector<std::string> output_store_index;
+    // for (auto i = 0; i < num_of_loops; i++)
+    // {
+    //     auto index = num_of_loops - 1 - i;
+    //     if (i == 0) 
+    //     {
+    //         input_load_index.push_back(default_index_str[index]);
+    //     }
 
-        kernel_load_index.push_back(default_index_str[index]);
-    }
-    auto load_str = std::string(4 + num_of_loops * 2, ' ')
-                  + "\%w_val = "
-                  + genLoad(kernel_load_index,
-                            kernel_reg, 
-                            0,
-                            num_of_loops - 1,
-                            kernel_memref) + "\n";
-    code += load_str;
-    load_str = std::string(4 + num_of_loops * 2, ' ')
-             + "\%in_val = "
-             + genLoad(input_load_index,
-                       input_buffer_reg, 
-                       0,
-                       0,
-                       input_memref) + "\n";
-    code += load_str;
+    //     if (i == (num_of_loops -1))
+    //     {
+    //         output_store_index.push_back(default_index_str[index]);
+    //     }
 
-    // Gen multiply and accumulate
-    std::string dest = "\%out_tmp";
-    std::string opr_1 = "\%in_val";
-    std::string opr_2 = "\%w_val";
-    auto mult_str = std::string(4 + num_of_loops * 2, ' ')
-                  + genMult(dest, opr_1, opr_2, 
-                            cur_layer.getDataType())
-                  + "\n";
-    code += mult_str;
+    //     kernel_load_index.push_back(default_index_str[index]);
+    // }
+    // auto load_str = std::string(4 + num_of_loops * 2, ' ')
+    //               + "\%w_val = "
+    //               + genLoad(kernel_load_index,
+    //                         kernel_reg, 
+    //                         0,
+    //                         num_of_loops - 1,
+    //                         kernel_memref) + "\n";
+    // code += load_str;
+    // load_str = std::string(4 + num_of_loops * 2, ' ')
+    //          + "\%in_val = "
+    //          + genLoad(input_load_index,
+    //                    input_buffer_reg, 
+    //                    0,
+    //                    0,
+    //                    input_memref) + "\n";
+    // code += load_str;
 
-    dest = "\%out_val";
-    opr_1 = "\%out_val";
-    opr_2 = "\%out_tmp";
-    auto add_str = std::string(4 + num_of_loops * 2, ' ')
-                 + genAdd(dest, opr_1, opr_2, 
-                           cur_layer.getDataType())
-                 + "\n";
-    code += add_str;
+    // // Gen multiply and accumulate
+    // std::string dest = "\%out_tmp";
+    // std::string opr_1 = "\%in_val";
+    // std::string opr_2 = "\%w_val";
+    // auto mult_str = std::string(4 + num_of_loops * 2, ' ')
+    //               + genMult(dest, opr_1, opr_2, 
+    //                         cur_layer.getDataType())
+    //               + "\n";
+    // code += mult_str;
 
-    // Gen loop end
-    for (auto i = num_of_loops - 1; i >= 0; i--)
-    {
-        std::string one_loop = 
-            std::string(4 + i * 2, ' ') + "}\n";
-        code += one_loop; 
+    // dest = "\%out_val";
+    // opr_1 = "\%out_val";
+    // opr_2 = "\%out_tmp";
+    // auto add_str = std::string(4 + num_of_loops * 2, ' ')
+    //              + genAdd(dest, opr_1, opr_2, 
+    //                        cur_layer.getDataType())
+    //              + "\n";
+    // code += add_str;
 
-        if (i == (num_of_loops - 1))
-        {
-            std::string to_be_stored = "\%out_val";
-            code += (std::string(4 + i * 2, ' ') +
-                     genStore(output_store_index,
-                     to_be_stored,
-                     output_reg, 0, 0, output_memref) + "\n");
-        }
-    }
+    // // Gen loop end
+    // for (auto i = num_of_loops - 1; i >= 0; i--)
+    // {
+    //     std::string one_loop = 
+    //         std::string(4 + i * 2, ' ') + "}\n";
+    //     code += one_loop; 
+
+    //     if (i == (num_of_loops - 1))
+    //     {
+    //         std::string to_be_stored = "\%out_val";
+    //         code += (std::string(4 + i * 2, ' ') +
+    //                  genStore(output_store_index,
+    //                  to_be_stored,
+    //                  output_reg, 0, 0, output_memref) + "\n");
+    //     }
+    // }
 
     mlir << code;
 

@@ -28,6 +28,7 @@ namespace Linalg
 #define EXP 16 
 #define YIELD 17
 #define DIVF 18
+#define MATMUL 19
 
 class MLIRDict
 {
@@ -56,6 +57,7 @@ class MLIRDict
         dict.insert({EXP, "math.exp"});
         dict.insert({YIELD, "scf.yield"});
         dict.insert({DIVF, "divf"});
+        dict.insert({MATMUL, "linalg.matmul"});
     }
 
     std::string& operator[](unsigned opr)
