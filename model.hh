@@ -37,6 +37,7 @@ class Model
             Dense, // dense (fully-connected) layer
             MAX
         }layer_type = Layer_Type::MAX;
+        auto getLayerType() { return layer_type; }
 
         enum class Data_Type : int
         {
@@ -91,7 +92,7 @@ class Model
         std::vector<unsigned> moving_variance_dims;
         std::vector<float> moving_variance;
 
-	    std::vector<unsigned> output_dims; // dimension of output
+	std::vector<unsigned> output_dims; // dimension of output
 
         void setDataType(std::string &_type)
         {
@@ -112,6 +113,7 @@ class Model
             w_dims = _w_dims;
             weights = _weights;
         }
+        auto &getKernel() { return weights; }
         auto &getKernelDim() { return w_dims; }
         void setBiases(std::vector<unsigned> &_b_dims,
                        std::vector<float> &_bias)
@@ -188,6 +190,8 @@ class Model
             std::cerr << "Error: layer is not found.\n";
             exit(0);
         }
+
+        // auto &getLayers() { return layers; }
 
         void MLIRGenerator();
 

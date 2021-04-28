@@ -29,5 +29,8 @@ func @main() -> ()
         strides = [1, 1]
     } : memref<5x5x1x6xf32>, memref<1x28x28x1xf32>, memref<1x28x28x6xf32>
 
+    call @print_memref_4d_f32(%1) : (memref<5x5x1x6xf32>) -> ()
     return
 }
+
+func private @print_memref_4d_f32(memref<5x5x1x6xf32>) attributes { llvm.emit_c_interface }

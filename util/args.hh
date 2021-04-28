@@ -30,11 +30,11 @@ class Args
 	po::options_description desc("Options"); 
         desc.add_options() 
             ("help", "Print help messages")
-            ("arch-json", po::value<std::string>(&arch_json_fn),
+            ("arch-json", po::value<std::string>(&arch_json_fn)->required(),
                 "Architectural description in json format")
-            ("weight-h5", po::value<std::string>(&weight_h5_fn),
+            ("weight-h5", po::value<std::string>(&weight_h5_fn)->required(),
                 "Weight file in h5 format")
-            ("mlir-gen", po::value<std::string>(&gen_mlir_out),
+            ("mlir-gen", po::value<std::string>(&gen_mlir_out)->required(),
                 "Generated MLIR output file")
             ("print-layers", "Print layers and dimensions.");
         po::variables_map vm;

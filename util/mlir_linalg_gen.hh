@@ -43,7 +43,7 @@ class MLIRGen
         mlir.open(_fn); 
     }
 
-    void genInit();
+    void genInit(std::vector<Layer> &layers);
 
     void genInputLayer(Layer& layer);
     void genConv2DLayer(Layer& prev_layer,
@@ -64,6 +64,13 @@ class MLIRGen
   protected:
 
     std::string genMemRef(std::vector<unsigned> &dims,
+                          Layer::Data_Type &d_type);
+
+    std::string genTensorConstF4D(std::vector<float> &vals,
+                                  std::vector<unsigned> &dims,
+                                  Layer::Data_Type &d_type);
+
+    std::string genTensor(std::vector<unsigned> &dims,
                           Layer::Data_Type &d_type);
 
     std::string genDilations(std::vector<unsigned>&);

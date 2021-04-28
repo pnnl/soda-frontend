@@ -13,9 +13,9 @@ void Model::Architecture::MLIRGenerator()
 {
     // TODO, let's assume a serial connection
     Linalg::MLIRGen mlir_gen(mlir_gen_fn);
-    mlir_gen.genInit();
+    mlir_gen.genInit(layers);
     // for (auto i = 0; i < layers.size(); i++)
-    for (auto i = 0; i < 12; i++)
+    for (auto i = 0; i < 2; i++)
     {
         layers[i].setID(i);
         if (layers[i].layer_type == Layer::Layer_Type::Input)

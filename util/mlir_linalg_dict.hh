@@ -29,6 +29,7 @@ namespace Linalg
 #define YIELD 17
 #define DIVF 18
 #define MATMUL 19
+#define TSTORE 20
 
 class MLIRDict
 {
@@ -58,6 +59,7 @@ class MLIRDict
         dict.insert({YIELD, "scf.yield"});
         dict.insert({DIVF, "divf"});
         dict.insert({MATMUL, "linalg.matmul"});
+        dict.insert({TSTORE, "memref.tensor_store"});
     }
 
     std::string& operator[](unsigned opr)

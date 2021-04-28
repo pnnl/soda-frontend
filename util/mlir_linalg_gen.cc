@@ -7,10 +7,34 @@ namespace SODA_FrontEnd
 {
 namespace Linalg
 {
-void MLIRGen::genInit()
+// TODO-Shihao
+// We temporarily put all the weights/bias as global private constants
+void MLIRGen::genInit(std::vector<Layer> &layers)
 {
-    mlir << "// AutoGen - Do not modify\n"
-         << "func @main() -> ()\n"
+    mlir << "// AutoGen - Do not modify\n\n";
+
+    for (auto i = 0; i < 2; i++)
+    {
+        // TODO, add more layer type
+        if (layers[i].getLayerType() == Layer::Layer_Type::Conv2D)
+        {
+            auto kernel_dim = layers[i].getKernelDim();
+            auto cur_layer_dtype = layers[i].getDataType();
+            auto kernel_memref = genMemRef(kernel_dim, 
+                                           cur_layer_dtype);
+            auto tensor_const = genTensorConstF4D(layers[i].getKernel(),
+                                                  kernel_dim, 
+                                                  cur_layer_dtype);
+
+            auto var_name = "@layer_" + std::to_string(i) + "_kernel";
+
+            mlir << "memref.global \"private\" constant "
+                 << var_name << " : " << kernel_memref 
+                 << " = dense<" << tensor_const << ">\n\n";
+        }
+    }
+
+    mlir << "func @main() -> ()\n"
          << "{\n"
          << "    // Global register id starts at: "
          << global_register_tracker << "\n";
@@ -58,9 +82,9 @@ void MLIRGen::genConv2DLayer(Layer& prev_layer,
     auto input_memref = genMemRef(input_shape, input_dtype);
     mlir << input_memref << "\n";
 
-    auto &kernel = cur_layer.getKernelDim();
+    auto &kernel_dim = cur_layer.getKernelDim();
     mlir << "    // Kernel dim.: ";
-    for (auto dim : kernel) { mlir << dim << " "; }
+    for (auto dim : kernel_dim) { mlir << dim << " "; }
     mlir << "\n";
 
     auto &stride = cur_layer.getStrides();
@@ -87,10 +111,10 @@ void MLIRGen::genConv2DLayer(Layer& prev_layer,
     if (cur_layer.padding_type == Layer::Padding_Type::valid)
     {
         // No padding
-        out_height = ceil(float(input_shape[1] - kernel[0]) / 
+        out_height = ceil(float(input_shape[1] - kernel_dim[0]) / 
                      float(stride[0])) + 1;
 	
-        out_width = ceil(float(input_shape[2] - kernel[1]) / 
+        out_width = ceil(float(input_shape[2] - kernel_dim[1]) / 
                      float(stride[1])) + 1;
     }
     else if (cur_layer.padding_type == Layer::Padding_Type::same)
@@ -98,16 +122,18 @@ void MLIRGen::genConv2DLayer(Layer& prev_layer,
         // Padding Present
         // TODO: consider other cases
         // Kernel size normally odd. 
-        unsigned padding_size = int(kernel[0])/2; 
+        unsigned padding_size = int(kernel_dim[0])/2; 
         // out_height = ceil(float(input_shape[1]) / float(stride[0]));
 	
         // out_width = ceil(float(input_shape[2]) / float(stride[1]));
 
-        out_height = ceil(float(input_shape[1] + 2 * padding_size - kernel[0]) / 
-                     float(stride[0])) + 1;
+        out_height = 
+            ceil(float(input_shape[1] + 2 * padding_size - kernel_dim[0]) / 
+            float(stride[0])) + 1;
 	
-        out_width = ceil(float(input_shape[2] + 2 * padding_size - kernel[1]) / 
-                     float(stride[1])) + 1;
+        out_width = 
+            ceil(float(input_shape[2] + 2 * padding_size - kernel_dim[1]) / 
+            float(stride[1])) + 1;
 
         // unsigned pad_along_height = std::max(int((out_height - 1) * stride[0] 
         //                           + kernel[0] - input_shape[1]), 0);
@@ -125,7 +151,7 @@ void MLIRGen::genConv2DLayer(Layer& prev_layer,
     output_shape.push_back(input_shape[0]);
     output_shape.push_back(out_height);
     output_shape.push_back(out_width);
-    output_shape.push_back(kernel[3]);
+    output_shape.push_back(kernel_dim[3]);
     mlir << "    // Output size: ";
     for (auto dim : output_shape) { mlir << dim << " "; }
     mlir << "\n";
@@ -144,15 +170,15 @@ void MLIRGen::genConv2DLayer(Layer& prev_layer,
         mlir << "] ";
     }
     mlir << "\n";
+
     // real code generation
     // alloc kernel
     auto &cur_layer_dtype = cur_layer.getDataType();
     auto kernel_reg = global_register_tracker;
-    auto kernel_memref = genMemRef(kernel, cur_layer_dtype);
+    auto kernel_memref = genMemRef(kernel_dim, cur_layer_dtype);
     std::string code = "    %" + std::to_string(kernel_reg)
-                     + " = "
-                     + dict[ALLOC]
-                     + "() : "
+                     + " = memref.get_global @layer_" 
+                     + std::to_string(cur_layer_id) + "_kernel : "
                      + kernel_memref;
     mlir << code << "\n";
     global_register_tracker++;
@@ -741,7 +767,7 @@ void MLIRGen::genSoftMaxLayer(Layer& prev_layer,
 
 void MLIRGen::genEnd()
 {
-    mlir << "    return;\n"
+    mlir << "    return\n"
          << "}\n";
     mlir.close();
 }
@@ -776,6 +802,115 @@ std::string MLIRGen::genMemRef(std::vector<unsigned> &dims,
     return ret;
 }
 
+std::string MLIRGen::genTensor(std::vector<unsigned> &dims,
+                               Layer::Data_Type &d_type)
+{
+    std::string ret = "tensor<";
+    if(dims.size() > 0) {
+        for (auto dim : dims)
+        {
+            ret += std::to_string(dim);
+            ret += "x";
+        }
+    }
+
+    switch (d_type) {
+        case Layer::Data_Type::index :
+            ret += "index>";
+            break;
+        case Layer::Data_Type::i32 :
+            ret += "i32>";
+            break;
+        case Layer::Data_Type::f32 :
+            ret += "f32>";
+            break;
+        default : 
+            // TODO: Proper exit handling 
+            exit (EXIT_FAILURE);
+    }
+
+    return ret;
+}
+
+std::string MLIRGen::genTensorConstF4D(std::vector<float> &vals,
+                                       std::vector<unsigned> &dims,
+                                       Layer::Data_Type &d_type)
+{
+    unsigned size_check = 1;
+    for (auto dim : dims) size_check *= dim;
+    assert(size_check);
+    assert(dims.size() == 4);
+
+    std::string ret = "";
+    for (int i = 0; i < dims[0]; i++)
+    {
+        if (i == 0)
+        {
+            ret += "[";
+        }
+        for (int j = 0; j < dims[1]; j++)
+        {
+            if (j == 0)
+            {
+                ret += "[";
+            }
+            for (int k = 0; k < dims[2]; k++)
+            {
+                if (k == 0)
+                {
+                    ret += "[";
+                }
+                for (int m = 0; m < dims[3]; m++)
+                {
+                    auto index = i * dims[1] * dims[2] * dims[3] +
+                                 j * dims[2] * dims[3] +
+                                 k * dims[3] + m;
+                    if (m == 0)
+                    {
+                        ret += ("[" + std::to_string(vals[index]) + ",");
+                    }
+		    else if (m > 0 && m < dims[3] - 1)
+                    {
+                        ret += (std::to_string(vals[index]) + ",");
+                    }
+                    else
+                    {
+                        ret += (std::to_string(vals[index]) + "]");
+                    }
+                }
+                if (k < dims[2] - 1)
+		{
+                    ret += (",");
+                }
+                else
+                {
+                    ret += "]";
+                }
+            }
+            if (j < dims[1] - 1)
+            {
+                ret += (",");
+                // ret += (",\n");
+            }
+            else
+            {
+                ret += "]";
+            }
+        }
+	if (i < dims[0] - 1)
+        {
+            // ret += (",\n\n");
+            ret += (",");
+        }
+        else
+        {
+            ret += "]";
+        }
+    }
+
+    return ret;
+}
+
 std::string MLIRGen::genDilations(std::vector<unsigned> &dilation)
 {
     std::string ret = "";
@@ -797,6 +932,7 @@ std::string MLIRGen::genPaddings(std::vector<std::vector<unsigned>> &padding)
 
     ret = "padding = dense<";
     auto out_cnt = 0;
+    ret += "[";
     for (auto dir : padding)
     {
         ret += "[";
@@ -823,6 +959,7 @@ std::string MLIRGen::genPaddings(std::vector<std::vector<unsigned>> &padding)
         }
         out_cnt++;
     }
+    ret += "]";
 
     // TODO, there should be lots error checking through the codes
     ret = ret + "> : tensor<"
