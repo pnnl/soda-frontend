@@ -13,7 +13,7 @@ void MLIRGen::genInit(std::vector<Layer> &layers)
 {
     mlir << "// AutoGen - Do not modify\n\n";
 
-    for (auto i = 0; i < 2; i++)
+    for (auto i = 0; i < layers.size(); i++)
     {
         // TODO, add more layer type
         if (layers[i].getLayerType() == Layer::Layer_Type::Conv2D)
@@ -26,7 +26,7 @@ void MLIRGen::genInit(std::vector<Layer> &layers)
                                                   kernel_dim, 
                                                   cur_layer_dtype);
 
-            auto var_name = "@layer_" + std::to_string(i) + "_kernel";
+            auto var_name = "@" + layers[i].getName() + "_kernel";
 
             mlir << "memref.global \"private\" constant "
                  << var_name << " : " << kernel_memref 
@@ -177,8 +177,8 @@ void MLIRGen::genConv2DLayer(Layer& prev_layer,
     auto kernel_reg = global_register_tracker;
     auto kernel_memref = genMemRef(kernel_dim, cur_layer_dtype);
     std::string code = "    %" + std::to_string(kernel_reg)
-                     + " = memref.get_global @layer_" 
-                     + std::to_string(cur_layer_id) + "_kernel : "
+                     + " = memref.get_global @" 
+                     + cur_layer.getName() + "_kernel : "
                      + kernel_memref;
     mlir << code << "\n";
     global_register_tracker++;
