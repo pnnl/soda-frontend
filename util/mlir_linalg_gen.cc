@@ -461,7 +461,8 @@ void MLIRGen::genFlattenLayer(Layer& prev_layer,
     // Gen store
     code += (std::string(4 + num_of_loops * 2, ' ') + 
             dict[STORE] + " \%ld_val, %" +
-            std::to_string(out_buffer_reg) + "[\%" + default_index_str[0]+ ",\%index] : " + 
+            std::to_string(out_buffer_reg) + 
+            "[\%" + default_index_str[0]+ ",\%index] : " + 
             out_memref + "\n");
 
     // Gen loop end
