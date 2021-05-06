@@ -1,5 +1,5 @@
 HDF5Lib := /usr/include/hdf5/serial/
-CC      := g++
+CC      := g++ -g
 SOURCE	:= main.cc \
 		model.cc \
 		util/mlir_linalg_gen.cc

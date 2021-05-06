@@ -14,8 +14,8 @@ void Model::Architecture::MLIRGenerator()
     // TODO, let's assume a serial connection
     Linalg::MLIRGen mlir_gen(mlir_gen_fn);
     mlir_gen.genInit(layers);
-    // for (auto i = 0; i < layers.size(); i++)
-    for (auto i = 0; i < 2; i++)
+    for (auto i = 0; i < layers.size(); i++)
+    // for (auto i = 0; i < 3; i++)
     {
         layers[i].setID(i);
         if (layers[i].layer_type == Layer::Layer_Type::Input)
@@ -92,7 +92,7 @@ void Model::loadArch(std::string &arch_file)
                 arch.addLayer(name, layer_type);
 
                 // TODO, set data type
-		std::string d_type = v.second.get<std::string>("config.dtype");
+		        std::string d_type = v.second.get<std::string>("config.dtype");
                 arch.getLayer(name).setDataType(d_type);
                 arch.getLayer(name).setOutputDim(output_dims);
 

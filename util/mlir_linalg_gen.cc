@@ -52,14 +52,19 @@ void MLIRGen::genInputLayer(Layer& layer)
     for (auto dim : input_shape) { mlir << dim << " "; }
     mlir << "\n";
 
-    std::string code = "    %" + std::to_string(global_register_tracker)
+    const auto [it_var, flag] = variable_map.insert({layer.getName(),global_register_tracker++});
+    if(!flag) {
+        std::cout << "Variable map insertion failure" << std::endl;
+    }
+    // std::string code = "    %" + std::to_string(global_register_tracker)
+    std::string code = "    %" + std::to_string(variable_map.at(layer.getName()))
                      + " = "
                      + dict[ALLOC]
                      + "() : "
                      + genMemRef(input_shape, input_dtype);
 
     mlir << code << "\n";
-    layer_output_buffer.push_back(global_register_tracker++);
+    // layer_output_buffer.push_back(global_register_tracker++);
     mlir << "\n";
 }
 
@@ -74,7 +79,8 @@ void MLIRGen::genConv2DLayer(Layer& prev_layer,
     auto prev_layer_id = prev_layer.getID();
     auto cur_layer_id = cur_layer.getID();
     mlir << "    // Input from layer: " << prev_layer.getName() << "\n";
-    auto input_buffer_reg = layer_output_buffer[prev_layer_id];
+    // auto input_buffer_reg = layer_output_buffer[prev_layer_id];
+    auto input_buffer_reg = variable_map.at(prev_layer.getName());
     mlir << "    // Input buffer: %"
          << input_buffer_reg << " : ";
     auto& input_shape = prev_layer.getOutputDim();
@@ -174,17 +180,30 @@ void MLIRGen::genConv2DLayer(Layer& prev_layer,
     // real code generation
     // alloc kernel
     auto &cur_layer_dtype = cur_layer.getDataType();
-    auto kernel_reg = global_register_tracker;
+    auto kernel_name = cur_layer.getName() + "_kernel";
+    const auto [it_var1, flag1] = variable_map.insert({kernel_name,global_register_tracker++});
+    if(!flag1) {
+        std::cout << "Variable map insertion failure" << std::endl;
+    }
+    // auto kernel_reg = global_register_tracker;
+    auto kernel_reg = variable_map.at(kernel_name);
     auto kernel_memref = genMemRef(kernel_dim, cur_layer_dtype);
     std::string code = "    %" + std::to_string(kernel_reg)
                      + " = memref.get_global @" 
-                     + cur_layer.getName() + "_kernel : "
+                    //  + cur_layer.getName() + "_kernel : "
+                     + kernel_name
+                     + " : "
                      + kernel_memref;
     mlir << code << "\n";
-    global_register_tracker++;
+    // global_register_tracker++;
 
     // alloc output
-    auto output_reg = global_register_tracker;
+    const auto [it_var2, flag2] = variable_map.insert({cur_layer.getName(),global_register_tracker++});
+    if(!flag2) {
+        std::cout << "Variable map insertion failure" << std::endl;
+    }
+    // auto output_reg = global_register_tracker;
+    auto output_reg = variable_map.at(cur_layer.getName());
     auto output_memref = genMemRef(output_shape, cur_layer_dtype);
     code = "    %" + std::to_string(output_reg)
                    + " = "
@@ -192,8 +211,8 @@ void MLIRGen::genConv2DLayer(Layer& prev_layer,
                    + "() : "
                    + output_memref;
     mlir << code << "\n";
-    layer_output_buffer.push_back(global_register_tracker);
-    global_register_tracker++;
+    // layer_output_buffer.push_back(global_register_tracker);
+    // global_register_tracker++;
 
     // generate linalg operation
     code = "    " + dict[CONV2D] + "("
@@ -220,7 +239,8 @@ void MLIRGen::genActLayer(Layer& prev_layer,
     auto prev_layer_id = prev_layer.getID();
     auto cur_layer_id = cur_layer.getID();
     mlir << "    // Input from layer: " << prev_layer.getName() << "\n";
-    auto input_buffer_reg = layer_output_buffer[prev_layer_id];
+    // auto input_buffer_reg = layer_output_buffer[prev_layer_id];
+    auto input_buffer_reg = variable_map.at(prev_layer.getName());
     mlir << "    // Input buffer: %"
          << input_buffer_reg << " : ";
     auto& input_shape = prev_layer.getOutputDim();
@@ -235,7 +255,11 @@ void MLIRGen::genActLayer(Layer& prev_layer,
 
     cur_layer.setOutputDim(input_shape);
     // Keep the same 
-    layer_output_buffer.push_back(input_buffer_reg);
+    // layer_output_buffer.push_back(input_buffer_reg);
+    const auto [it_var, flag] = variable_map.insert({cur_layer.getName(),input_buffer_reg});
+    if(!flag) {
+        std::cout << "Variable map insertion failure" << std::endl;
+    }
 
     std::string code;
     if (cur_layer.getActivation() == Layer::Activation::relu)
@@ -264,7 +288,8 @@ void MLIRGen::genMaxPooling2DLayer(Layer& prev_layer,
     auto prev_layer_id = prev_layer.getID();
     auto cur_layer_id = cur_layer.getID();
     mlir << "    // Input from layer: " << prev_layer.getName() << "\n";
-    auto input_buffer_reg = layer_output_buffer[prev_layer_id];
+    // auto input_buffer_reg = layer_output_buffer[prev_layer_id];
+    auto input_buffer_reg = variable_map.at(prev_layer.getName());
     mlir << "    // Input buffer: %"
          << input_buffer_reg << " : ";
     auto& input_shape = prev_layer.getOutputDim();
@@ -306,7 +331,13 @@ void MLIRGen::genMaxPooling2DLayer(Layer& prev_layer,
 
     // alloc kernel
     auto &cur_layer_dtype = cur_layer.getDataType();
-    auto kernel_reg = global_register_tracker;
+    auto kernel_name = cur_layer.getName() + "_kernel";
+    const auto [it_var1, flag1] = variable_map.insert({kernel_name,global_register_tracker++});
+    if(!flag1) {
+        std::cout << "Variable map insertion failure" << std::endl;
+    }
+    // auto kernel_reg = global_register_tracker;
+    auto kernel_reg = variable_map.at(kernel_name);
     auto kernel_memref = genMemRef(kernel, cur_layer_dtype);
     std::string code = "    %" + std::to_string(kernel_reg)
                      + " = "
@@ -314,10 +345,15 @@ void MLIRGen::genMaxPooling2DLayer(Layer& prev_layer,
                      + "() : "
                      + kernel_memref;
     mlir << code << "\n";
-    global_register_tracker++;
+    // global_register_tracker++;
 
     // alloc output
-    auto output_reg = global_register_tracker;
+    const auto [it_var2, flag2] = variable_map.insert({cur_layer.getName(),global_register_tracker++});
+    if(!flag2) {
+        std::cout << "Variable map insertion failure" << std::endl;
+    }
+    // auto output_reg = global_register_tracker;
+    auto output_reg = variable_map.at(cur_layer.getName());
     auto output_memref = genMemRef(output_shape, cur_layer_dtype);
     code = "    %" + std::to_string(output_reg)
                    + " = "
@@ -325,8 +361,8 @@ void MLIRGen::genMaxPooling2DLayer(Layer& prev_layer,
                    + "() : "
                    + output_memref;
     mlir << code << "\n";
-    layer_output_buffer.push_back(global_register_tracker);
-    global_register_tracker++;
+    // layer_output_buffer.push_back(global_register_tracker);
+    // global_register_tracker++;
 
     // Generate linalg maxpooling dialect
     stride.insert(stride.begin(), 1);
@@ -353,7 +389,8 @@ void MLIRGen::genFlattenLayer(Layer& prev_layer,
     auto prev_layer_id = prev_layer.getID();
     auto cur_layer_id = cur_layer.getID();
     mlir << "    // Input from layer: " << prev_layer.getName() << "\n";
-    auto input_buffer_reg = layer_output_buffer[prev_layer_id];
+    // auto input_buffer_reg = layer_output_buffer[prev_layer_id];
+    auto input_buffer_reg = variable_map.at(prev_layer.getName());
     mlir << "    // Input buffer: %"
          << input_buffer_reg << " : ";
     auto& input_shape = prev_layer.getOutputDim();
@@ -382,11 +419,16 @@ void MLIRGen::genFlattenLayer(Layer& prev_layer,
         mlir << d << " ";
     mlir << "\n";
     std::vector<unsigned> out_dim = {out_size};
-    layer_output_buffer.push_back(global_register_tracker);
+    // layer_output_buffer.push_back(global_register_tracker);
     cur_layer.setOutputDim(output_shape);
     // cur_layer.setOutputDim(out_dim);
 
-    auto out_buffer_reg = global_register_tracker++;
+    const auto [it_var2, flag2] = variable_map.insert({cur_layer.getName(),global_register_tracker++});
+    if(!flag2) {
+        std::cout << "Variable map insertion failure" << std::endl;
+    }
+    // auto out_buffer_reg = global_register_tracker++;
+    auto out_buffer_reg = variable_map.at(cur_layer.getName());
     std::string out_memref = genMemRef(output_shape, cur_layer_dtype);
     // std::string out_memref = genMemRef(out_dim, cur_layer_dtype);
     std::string code = "    %" + std::to_string(out_buffer_reg)
@@ -486,7 +528,8 @@ void MLIRGen::genDenseLayer(Layer& prev_layer,
     auto prev_layer_id = prev_layer.getID();
     auto cur_layer_id = cur_layer.getID();
     mlir << "    // Input from layer: " << prev_layer.getName() << "\n";
-    auto input_buffer_reg = layer_output_buffer[prev_layer_id];
+    // auto input_buffer_reg = layer_output_buffer[prev_layer_id];
+    auto input_buffer_reg = variable_map.at(prev_layer.getName());
     mlir << "    // Input buffer: %"
          << input_buffer_reg << " : ";
     auto& input_shape = prev_layer.getOutputDim();
@@ -506,7 +549,13 @@ void MLIRGen::genDenseLayer(Layer& prev_layer,
     mlir << "    // Output size: " << kernel_dim[1] << "\n";
 
     auto &cur_layer_dtype = cur_layer.getDataType();
-    auto kernel_reg = global_register_tracker;
+    auto kernel_name = cur_layer.getName() + "_kernel";
+    const auto [it_var1, flag1] = variable_map.insert({kernel_name,global_register_tracker++});
+    if(!flag1) {
+        std::cout << "Variable map insertion failure" << std::endl;
+    }
+    // auto kernel_reg = global_register_tracker;
+    auto kernel_reg = variable_map.at(kernel_name);
     auto kernel_memref = genMemRef(kernel_dim, cur_layer_dtype);
     std::string code = "    %" + std::to_string(kernel_reg)
                      + " = "
@@ -514,12 +563,17 @@ void MLIRGen::genDenseLayer(Layer& prev_layer,
                      + "() : "
                      + kernel_memref;
     mlir << code << "\n";
-    global_register_tracker++;
+    // global_register_tracker++;
 
     // alloc output
     std::vector<unsigned> output_shape = {input_shape[0],kernel_dim[1]};
     // for (int i = )
-    auto output_reg = global_register_tracker;
+    const auto [it_var2, flag2] = variable_map.insert({cur_layer.getName(),global_register_tracker++});
+    if(!flag2) {
+        std::cout << "Variable map insertion failure" << std::endl;
+    }
+    // auto output_reg = global_register_tracker;
+    auto output_reg = variable_map.at(cur_layer.getName());
     auto output_memref = genMemRef(output_shape, cur_layer_dtype);
     code = "    %" + std::to_string(output_reg)
                    + " = "
@@ -527,9 +581,9 @@ void MLIRGen::genDenseLayer(Layer& prev_layer,
                    + "() : "
                    + output_memref;
     mlir << code << "\n\n";
-    layer_output_buffer.push_back(global_register_tracker);
+    // layer_output_buffer.push_back(global_register_tracker);
     cur_layer.setOutputDim(output_shape);
-    global_register_tracker++;
+    // global_register_tracker++;
 
     // Dense function
     // code = "";
@@ -659,7 +713,8 @@ void MLIRGen::genSoftMaxLayer(Layer& prev_layer,
     auto prev_layer_id = prev_layer.getID();
     auto cur_layer_id = cur_layer.getID();
     mlir << "    // Input from layer: " << prev_layer.getName() << "\n";
-    auto input_buffer_reg = layer_output_buffer[prev_layer_id];
+    // auto input_buffer_reg = layer_output_buffer[prev_layer_id];
+    auto input_buffer_reg = variable_map.at(prev_layer.getName());
     mlir << "    // Input buffer: %"
          << input_buffer_reg << " : ";
     auto& input_shape = prev_layer.getOutputDim();
@@ -687,7 +742,13 @@ void MLIRGen::genSoftMaxLayer(Layer& prev_layer,
         // Gen Exp
         auto temp_memref =  genMemRef(input_shape, input_dtype);
         code += "    // tmp buffer for exp eval \n";
-        auto tmp_exp_reg = global_register_tracker;
+        auto exp_reg_1_name = cur_layer.getName() + "_exp_reg_1";
+        const auto [it_var1, flag1] = variable_map.insert({exp_reg_1_name,global_register_tracker++});
+        if(!flag1) {
+            std::cout << "Variable map insertion failure" << std::endl;
+        }
+        // auto tmp_exp_reg = global_register_tracker;
+        auto tmp_exp_reg = variable_map.at(exp_reg_1_name);
         code += "    \%" + std::to_string(tmp_exp_reg)
                 + " = "
                 + dict[ALLOC]
@@ -695,9 +756,15 @@ void MLIRGen::genSoftMaxLayer(Layer& prev_layer,
                 + temp_memref
                 + "\n"
                 ;
-        global_register_tracker++;
+        // global_register_tracker++;
 
-        auto res_reg = global_register_tracker;
+        auto temp_res_1_name = cur_layer.getName() + "_res_reg_1";
+        const auto [it_var2, flag2] = variable_map.insert({temp_res_1_name,global_register_tracker++});
+        if(!flag2) {
+            std::cout << "Variable map insertion failure" << std::endl;
+        }
+        // auto res_reg = global_register_tracker;
+        auto res_reg = variable_map.at(temp_res_1_name);
         code += "    // buffer for result of softmax (exp norm) \n";
         code += "    \%" + std::to_string(res_reg)
                 + " = "
@@ -706,7 +773,7 @@ void MLIRGen::genSoftMaxLayer(Layer& prev_layer,
                 + temp_memref
                 + "\n"
                 ;
-        global_register_tracker++;
+        // global_register_tracker++;
 
         // constant value
         // TODO: Global constant tracker?
@@ -743,10 +810,14 @@ void MLIRGen::genSoftMaxLayer(Layer& prev_layer,
         // Reduce Sum
         std::vector<unsigned> col_shape; 
         col_shape.push_back(input_shape[1]);
-        // std::cout << " -- TEST 1" << std::endl;
         auto temp_memref2 = genMemRef(col_shape, input_dtype);
-        // std::cout << " -- TEST 2" << std::endl;
-        auto tmp_col_reg = global_register_tracker;
+        auto temp_col_reg_1_name = cur_layer.getName() + "_col_reg_1";
+        const auto [it_var3, flag3] = variable_map.insert({temp_col_reg_1_name,global_register_tracker++});
+        if(!flag3) {
+            std::cout << "Variable map insertion failure" << std::endl;
+        }
+        // auto tmp_col_reg = global_register_tracker;
+        auto tmp_col_reg = variable_map.at(temp_col_reg_1_name);
         code += "    \%" + std::to_string(tmp_col_reg)
                 + " = "
                 + dict[ALLOC]
@@ -754,7 +825,7 @@ void MLIRGen::genSoftMaxLayer(Layer& prev_layer,
                 + temp_memref2
                 + "\n"
                 ;
-        global_register_tracker++;
+        // global_register_tracker++;
         // std::cout << " -- TEST 3" << std::endl;
         code += genNormReduceSum(res_reg, tmp_exp_reg, tmp_col_reg, 
                             input_shape, temp_memref, temp_memref2, cur_layer_dtype);

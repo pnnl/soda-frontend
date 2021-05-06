@@ -2,6 +2,7 @@
 #define __MLIR_LINALG_GEN_HH__
 
 #include <fstream>
+#include <map>
 
 #include "../model.hh"
 #include "mlir_linalg_dict.hh"
@@ -20,6 +21,7 @@ class MLIRGen
 
     // Need to track of register ID assignment
     uint64_t global_register_tracker = 0;
+    std::map<std::string,int> variable_map; 
     // Track the output buffer ID of each layer
     
     // TODO: global array of constant values 
