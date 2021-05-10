@@ -55,12 +55,20 @@ class MLIRGen
     void genMaxPooling2DLayer(Layer& prev_layer,
                               Layer& cur_layer);
     void genFlattenLayer(Layer& prev_layer,
-                              Layer& cur_layer);
+                         Layer& cur_layer);
     void genDenseLayer(Layer& prev_layer,
-                              Layer& cur_layer);
+                       Layer& cur_layer);
     void genSoftMaxLayer(Layer& prev_layer,
-                              Layer& cur_layer);
-
+                         Layer& cur_layer);
+    void genBatchNormalizationLayer(Layer& prev_layer, 
+                                    Layer& cur_layer);
+    void genZeroPadding2DLayer(Layer& prev_layer,
+                               Layer& cur_layer);
+    void genAddLayer(Layer& prev_layer,
+                               Layer& cur_layer);
+    void genGlobalAveragePooling2DLayer(Layer& prev_layer,
+                               Layer& cur_layer);      
+                                                          
     void genEnd();
 
   protected:

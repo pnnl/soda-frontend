@@ -29,13 +29,16 @@ class Model
             Input, // the input layer
             Conv2D, // convolution layer
             Activation,
-            BatchNormalization,
+            BatchNormalization, // after convolution opr (conv, gamma, beta, mu, var, epsilon)
             Dropout,
             MaxPooling2D, // max polling layer
             AveragePooling2D,
             Flatten, // flatten layer
             Dense, // dense (fully-connected) layer
-            MAX
+            ZeroPadding2D, // Pad zero values to the tensor HxW
+            MAX,
+            Add,  // Add convolution layers
+            GlobalAveragePooling2D
         }layer_type = Layer_Type::MAX;
         auto getLayerType() { return layer_type; }
 

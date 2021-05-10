@@ -573,6 +573,30 @@ void MLIRGen::genDenseLayer(Layer& prev_layer,
     mlir << "\n";
 }
 
+void MLIRGen::genZeroPadding2DLayer(Layer& prev_layer,
+                            Layer& cur_layer)
+{
+    mlir << " ZeroPadding2D_todo.\n";
+}
+
+void MLIRGen::genBatchNormalizationLayer(Layer& prev_layer,
+                            Layer& cur_layer)
+{
+    mlir << " BatchNormalization Conv_todo.\n";
+}
+
+void MLIRGen::genAddLayer(Layer& prev_layer,
+                            Layer& cur_layer)
+{
+    mlir << " Add Conv_todo.\n";
+}
+
+void MLIRGen::genGlobalAveragePooling2DLayer(Layer& prev_layer,
+                            Layer& cur_layer)
+{
+    mlir << " GlobalAveragePooling2D _todo.\n";
+}
+
 void MLIRGen::genSoftMaxLayer(Layer& prev_layer,
                           Layer& cur_layer)
 {

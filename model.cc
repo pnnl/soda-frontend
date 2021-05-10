@@ -14,8 +14,8 @@ void Model::Architecture::MLIRGenerator()
     // TODO, let's assume a serial connection
     Linalg::MLIRGen mlir_gen(mlir_gen_fn);
     mlir_gen.genInit(layers);
-    for (auto i = 0; i < layers.size(); i++)
-    // for (auto i = 0; i < 2; i++)
+    // for (auto i = 0; i < layers.size(); i++)
+    for (auto i = 0; i < 1; i++)
     {
         layers[i].setID(i);
         if (layers[i].layer_type == Layer::Layer_Type::Input)
@@ -45,6 +45,27 @@ void Model::Architecture::MLIRGenerator()
         {
             mlir_gen.genDenseLayer(layers[i-1], layers[i]);
         }
+        else if (layers[i].layer_type == Layer::Layer_Type::BatchNormalization)
+        {
+            // For Convolution
+            mlir_gen.genBatchNormalizationLayer(layers[i-1], layers[i]);
+        }
+        else if (layers[i].layer_type == Layer::Layer_Type::ZeroPadding2D)
+        {
+            // For Convolution
+            mlir_gen.genZeroPadding2DLayer(layers[i-1], layers[i]);
+        }
+        else if (layers[i].layer_type == Layer::Layer_Type::Add)
+        {
+            // For Convolution Add
+            mlir_gen.genAddLayer(layers[i-1], layers[i]);
+        }
+        else if (layers[i].layer_type == Layer::Layer_Type::GlobalAveragePooling2D)
+        {
+            // For Convolution Add, overlap with MaxPooling/AveragePooling?? 
+            mlir_gen.genGlobalAveragePooling2DLayer(layers[i-1], layers[i]);
+        }
+        
     }
     mlir_gen.genEnd();
 }
@@ -139,9 +160,28 @@ void Model::loadArch(std::string &arch_file)
             {
                 layer_type = Layer::Layer_Type::Dense;
             }
+            else if (class_name == "ZeroPadding2D") 
+            {
+                // break;
+                layer_type = Layer::Layer_Type::ZeroPadding2D;
+            }
+            else if (class_name == "BatchNormalization") 
+            {
+                layer_type = Layer::Layer_Type::BatchNormalization;
+            }
+            else if (class_name == "Add") 
+            {
+                // break;
+                layer_type = Layer::Layer_Type::Add;
+            }
+            else if (class_name == "GlobalAveragePooling2D") 
+            {
+                layer_type = Layer::Layer_Type::GlobalAveragePooling2D;
+            }
             else 
             { 
-                std::cerr << "Error: Unsupported layer type.\n";
+                // std::cerr << "Error: Unsupported layer type.\n";
+                std::cerr << class_name << " Not yet supported. \n";
                 exit(0);
             }
 
