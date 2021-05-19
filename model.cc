@@ -4,6 +4,7 @@
 #include <boost/property_tree/ptree.hpp>
 #include <boost/property_tree/json_parser.hpp>
 #include <boost/foreach.hpp>
+#include <cassert>
 
 #include "util/mlir_linalg_gen.hh"
 
@@ -15,7 +16,7 @@ void Model::Architecture::MLIRGenerator()
     Linalg::MLIRGen mlir_gen(mlir_gen_fn);
     mlir_gen.genInit(layers);
     // for (auto i = 0; i < layers.size(); i++)
-    for (auto i = 0; i < 1; i++)
+    for (auto i = 0; i < 3; i++)
     {
         layers[i].setID(i);
         if (layers[i].layer_type == Layer::Layer_Type::Input)
@@ -117,7 +118,7 @@ void Model::loadArch(std::string &arch_file)
                 arch.getLayer(name).setDataType(d_type);
                 arch.getLayer(name).setOutputDim(output_dims);
 
-                layer_counter++;
+                // layer_counter++;
             }
 
             std::string class_name = v.second.get<std::string>("class_name");
@@ -223,6 +224,31 @@ void Model::loadArch(std::string &arch_file)
   
                 for (auto stride : strides_str) { strides.push_back(stoll(stride)); }
                 arch.getLayer(name).setStrides(strides);
+            }
+
+            if (class_name == "ZeroPadding2D")
+            {
+                auto &p_list = arch.getLayer(name).getPaddings();
+                p_list.resize(0);
+                
+                // Count Children elements
+                for (boost::property_tree::ptree::value_type &cell : 
+                    v.second.get_child("config.padding"))
+                {
+                    boost::property_tree::ptree subt = cell.second;
+                    for(boost::property_tree::ptree::value_type &cell2 : subt)
+                    {
+                        auto val = cell2.second.data();
+                        p_list.push_back(std::stoul(val, nullptr, 0));
+                        std::cout << std::string(val) << std::endl; 
+                    }
+                }
+                arch.getLayer(name).setPaddings(p_list);
+                auto &p_list2 = arch.getLayer(name).getPaddings();
+                for(auto p : p_list2) 
+                {
+                    std::cout << p << std::endl;
+                }
             }
 
             if (class_name == "Conv2D")

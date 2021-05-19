@@ -21,11 +21,11 @@ class MLIRGen
 
     // Need to track of register ID assignment
     uint64_t global_register_tracker = 0;
-    std::map<std::string,int> variable_map; 
+    std::map<std::string,int> variable_map;
     // Track the output buffer ID of each layer
-    
-    // TODO: global array of constant values 
-    // TODO: global tmp variable count; 
+
+    // TODO: global array of constant values
+    // TODO: global tmp variable count;
     std::vector<uint64_t> layer_output_buffer;
 
     // dictionary
@@ -35,14 +35,14 @@ class MLIRGen
     std::vector<std::string> default_index_str;
 
   public:
-    MLIRGen(std::string &_fn) 
-    { 
-        default_index_str = 
+    MLIRGen(std::string &_fn)
+    {
+        default_index_str =
             {"a", "b", "c", "d", "e", "f", "g", "h", "i",
              "j", "k", "l", "m", "n", "o", "p", "q", "r",
              "s", "t", "u", "v", "w", "x", "y", "z"};
 
-        mlir.open(_fn); 
+        mlir.open(_fn);
     }
 
     void genInit(std::vector<Layer> &layers);
@@ -60,20 +60,24 @@ class MLIRGen
                        Layer& cur_layer);
     void genSoftMaxLayer(Layer& prev_layer,
                          Layer& cur_layer);
-    void genBatchNormalizationLayer(Layer& prev_layer, 
+    void genBatchNormalizationLayer(Layer& prev_layer,
                                     Layer& cur_layer);
     void genZeroPadding2DLayer(Layer& prev_layer,
                                Layer& cur_layer);
     void genAddLayer(Layer& prev_layer,
                                Layer& cur_layer);
     void genGlobalAveragePooling2DLayer(Layer& prev_layer,
-                               Layer& cur_layer);      
-                                                          
+                               Layer& cur_layer);
+
     void genEnd();
 
   protected:
 
+    // TODO: (Vinay) Templatize for tensor and memref
     std::string genMemRef(std::vector<unsigned> &dims,
+                          Layer::Data_Type &d_type);
+    // TODO: (Vinay) FIX this and use just sinble genMemRef
+    std::string genMemRef2(std::vector<unsigned> &dims,
                           Layer::Data_Type &d_type);
 
     std::string genTensorConstF4D(std::vector<float> &vals,
@@ -126,31 +130,31 @@ class MLIRGen
     std::string genExp(unsigned,
                        unsigned,
                        std::vector<unsigned>&,
-                       std::string&, 
+                       std::string&,
                        std::string&);
-    std::string genNormReduceSum(unsigned res_buf, 
-                                 unsigned exp_buf, 
+    std::string genNormReduceSum(unsigned res_buf,
+                                 unsigned exp_buf,
                                  unsigned row_buf,
-                                 std::vector<unsigned> &shape, 
+                                 std::vector<unsigned> &shape,
                                  std::string &shape2d_memref,
                                  std::string &shape1d_memref,
                                  std::string &dtype);
     std::string genReduceSum1D(unsigned exp_buf,
-                               unsigned row_buf, 
+                               unsigned row_buf,
                                std::vector<unsigned> &shape,
                                unsigned loop_lvl_cnt,
                                std::string &shape2d_memref,
                                std::string &shape1d_memref,
                                std::string &dtype,
                                std::string &sum_var);
-    std::string genExpNorm(unsigned res_buf, 
-                           unsigned exp_buf, 
-                           std::vector<unsigned> &shape, 
+    std::string genExpNorm(unsigned res_buf,
+                           unsigned exp_buf,
+                           std::vector<unsigned> &shape,
                            unsigned loop_lvl_cnt,
                            std::string &shape2d_memref,
                            std::string &dtype,
-                           std::string &sum_var);      
-                                
+                           std::string &sum_var);
+
 
     std::string genZeroF()
     {

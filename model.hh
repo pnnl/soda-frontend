@@ -36,9 +36,9 @@ class Model
             Flatten, // flatten layer
             Dense, // dense (fully-connected) layer
             ZeroPadding2D, // Pad zero values to the tensor HxW
-            MAX,
             Add,  // Add convolution layers
-            GlobalAveragePooling2D
+            GlobalAveragePooling2D,
+            MAX
         }layer_type = Layer_Type::MAX;
         auto getLayerType() { return layer_type; }
 
@@ -67,6 +67,8 @@ class Model
         std::vector<float> bias; // all the bias
         // dilation rage
         std::vector<unsigned> dilations;
+        // Padding range
+        std::vector<unsigned> paddings; 
 
         // Activation type
         enum class Activation : int
@@ -95,7 +97,7 @@ class Model
         std::vector<unsigned> moving_variance_dims;
         std::vector<float> moving_variance;
 
-	std::vector<unsigned> output_dims; // dimension of output
+	    std::vector<unsigned> output_dims; // dimension of output
 
         void setDataType(std::string &_type)
         {
@@ -134,6 +136,11 @@ class Model
             dilations = _dilations;
         }
         auto &getDilations() { return dilations; }
+        void setPaddings(std::vector<unsigned> &_paddings)
+        {
+            paddings = _paddings;
+        }
+        auto &getPaddings() { return paddings;}
         void setBeta(std::vector<unsigned> &dims, std::vector<float> &data)
         {
             beta_dims = dims;
@@ -285,6 +292,30 @@ class Model
                 else if (type == Layer::Layer_Type::Dense)
                 { 
                     std::cout << "Layer type: Dense" << std::endl; 
+                    std::cout << "Output Dims: ";
+                    auto &output_dims = layer.getOutputDim();
+                    for (auto dim : output_dims) { std::cout << dim << " "; }
+                    std::cout << std::endl;
+                }
+                else if (type == Layer::Layer_Type::ZeroPadding2D)
+                {
+                    std::cout << "Layer type: ZeroPadding2D" << std::endl; 
+                    std::cout << "Output Dims: ";
+                    auto &output_dims = layer.getOutputDim();
+                    for (auto dim : output_dims) { std::cout << dim << " "; }
+                    std::cout << std::endl;
+                }
+                else if (type == Layer::Layer_Type::Add)
+                {
+                    std::cout << "Layer type: Add" << std::endl; 
+                    std::cout << "Output Dims: ";
+                    auto &output_dims = layer.getOutputDim();
+                    for (auto dim : output_dims) { std::cout << dim << " "; }
+                    std::cout << std::endl;
+                }
+                else if (type == Layer::Layer_Type::GlobalAveragePooling2D)
+                {
+                    std::cout << "Layer type: GlobalAveragePooling2D" << std::endl; 
                     std::cout << "Output Dims: ";
                     auto &output_dims = layer.getOutputDim();
                     for (auto dim : output_dims) { std::cout << dim << " "; }
