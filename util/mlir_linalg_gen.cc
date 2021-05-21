@@ -592,14 +592,15 @@ void MLIRGen::genZeroPadding2DLayer(Layer& prev_layer,
 
     auto& output_dtype = cur_layer.getDataType();
     std::vector<unsigned> output_shape;
+    
     //TODO:(Vinay) Padding for this layer has 4 dims. Auto detect the sizes?
     // Layer padding
     auto lp = cur_layer.getPaddings();
-
-    output_shape.push_back(input_shape[0] + lp[0]);
-    output_shape.push_back(input_shape[1] + lp[2]);
-    output_shape.push_back(input_shape[2]);
+    output_shape.push_back(input_shape[0]);
+    output_shape.push_back(input_shape[1] + 2*lp[0]);
+    output_shape.push_back(input_shape[2] + 2*lp[2]);
     output_shape.push_back(input_shape[3]);
+
     mlir << "    // Output size: ";
     for (auto dim : output_shape) { mlir << dim << " "; }
     mlir << "\n";

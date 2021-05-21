@@ -8,7 +8,7 @@ int main(int argc, const char *argv[])
     SODA_FrontEnd::Model model(args.getArchJson(), 
                                args.getWeightH5(),
                                args.getGenMLIROutFn());
+    model.MLIRGenerator();
     if (args.print_layers)
         model.printLayers();
-    model.MLIRGenerator();
 }
