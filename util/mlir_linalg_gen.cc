@@ -116,10 +116,10 @@ void MLIRGen::genConv2DLayer(Layer& prev_layer,
     if (cur_layer.padding_type == Layer::Padding_Type::valid)
     {
         // No padding
-        out_height = ceil(float(input_shape[1] - kernel_dim[0]) /
+        out_height = floor(float(input_shape[1] - kernel_dim[0]) /
                      float(stride[0])) + 1;
 
-        out_width = ceil(float(input_shape[2] - kernel_dim[1]) /
+        out_width = floor(float(input_shape[2] - kernel_dim[1]) /
                      float(stride[1])) + 1;
     }
     else if (cur_layer.padding_type == Layer::Padding_Type::same)
@@ -130,11 +130,11 @@ void MLIRGen::genConv2DLayer(Layer& prev_layer,
         unsigned padding_size = int(kernel_dim[0])/2;
 
         out_height =
-            ceil(float(input_shape[1] + 2 * padding_size - kernel_dim[0]) /
+            floor(float(input_shape[1] + 2 * padding_size - kernel_dim[0]) /
             float(stride[0])) + 1;
 
         out_width =
-            ceil(float(input_shape[2] + 2 * padding_size - kernel_dim[1]) /
+            floor(float(input_shape[2] + 2 * padding_size - kernel_dim[1]) /
             float(stride[1])) + 1;
 
         unsigned pad_along_height,pad_along_width;
