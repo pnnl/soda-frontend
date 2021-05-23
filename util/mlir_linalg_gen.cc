@@ -192,10 +192,10 @@ void MLIRGen::genConv2DLayer(Layer& prev_layer,
     auto output_reg = variable_map.at(cur_layer.getName());
     auto output_memref = genMemRef(output_shape, cur_layer_dtype);
     code = "    %" + std::to_string(output_reg)
-                   + " = "
-                   + dict[ALLOC]
-                   + "() : "
-                   + output_memref;
+           + " = "
+           + dict[ALLOC]
+           + "() : "
+           + output_memref;
     mlir << code << "\n";
 
     // generate linalg operation
@@ -688,7 +688,68 @@ void MLIRGen::genZeroPadding2DLayer(Layer& prev_layer,
 void MLIRGen::genBatchNormalizationLayer(Layer& prev_layer,
                             Layer& cur_layer)
 {
-    mlir << " BatchNormalization Conv_todo.\n";
+    mlir << "    // Layer type: BatchNormalization (Conv2D)\n"
+         << "    // Layer name: " << cur_layer.getName() << "\n";
+    auto prev_layer_id = prev_layer.getID();
+    auto cur_layer_id = cur_layer.getID();
+    mlir << "    // Input from layer: " << prev_layer.getName() << "\n";
+    auto input_buffer_reg = variable_map.at(prev_layer.getName());
+    mlir << "    // Input buffer: %"
+         << input_buffer_reg << " : ";
+    auto& input_shape = prev_layer.getOutputDim();
+    auto& input_dtype = prev_layer.getDataType();
+    auto input_memref = genMemRef(input_shape, input_dtype);
+    mlir << input_memref << "\n";
+
+    // Output Shape, Dim 
+    auto& output_dtype = cur_layer.getDataType();
+    auto &cur_layer_dtype = cur_layer.getDataType();
+    std::vector<unsigned> output_shape = input_shape;
+    mlir << "    // Output size: ";
+    for (auto dim : output_shape) { mlir << dim << " "; }
+    mlir << "\n";
+    cur_layer.setOutputDim(output_shape);
+
+    // alloc output 
+    const auto [it_var1, flag1] = variable_map.insert({cur_layer.getName(),global_register_tracker++});
+    if(!flag1) {
+        std::cout << "Variable map insertion failure" << std::endl;
+    }
+    auto output_reg = variable_map.at(cur_layer.getName());
+    auto output_memref = genMemRef(output_shape, cur_layer_dtype);
+
+    // If input_shape[0] > 1 i.e. batch size is greater than 1, apply batch norm, else none. 
+    // TODO: If epsilon variable can be read, we can get rid of this condition. 
+    if(input_shape[0] > 1) {
+        // alloc memory for sum
+        auto batch_sum_name = cur_layer.getName() + "_batch_sum";
+        std::vector<unsigned> batch_sum_shape = input_shape; 
+        batch_sum_shape[0] = 1; // adding along the batch axis
+        const auto [it_var2, flag2] = variable_map.insert({batch_sum_name,global_register_tracker++});
+        if(!flag2) {
+            std::cout << "Variable map insertion failure" << std::endl;
+        }
+        auto batch_sum_reg = variable_map.at(batch_sum_name);
+        auto batch_sum_memref = genMemRef(batch_sum_shape, cur_layer_dtype);
+        auto code = "    %" + std::to_string(batch_sum_reg)
+                       + " = "
+                       + dict[ALLOC]
+                       + "() : "
+                       + batch_sum_memref;
+        mlir << code << "\n";
+    }
+    else
+    {
+        auto code = "    %" + std::to_string(output_reg) 
+                    + " = "
+                    + "%" + std::to_string(input_buffer_reg);
+                    // + " : "
+                    // + output_memref;
+        mlir << code << "\n";
+
+    }
+
+
 }
 
 void MLIRGen::genAddLayer(Layer& prev_layer,
