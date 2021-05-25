@@ -147,6 +147,12 @@ class MLIRGen
                                std::string &shape1d_memref,
                                std::string &dtype,
                                std::string &sum_var);
+    std::string genSum1D(std::string &sum_var, 
+                          unsigned array_size, 
+                          unsigned row_buf, 
+                          std::string &row_shape_memref,
+                          Layer::Data_Type &dtype, 
+                          unsigned space_scaling); 
     std::string genExpNorm(unsigned res_buf,
                            unsigned exp_buf,
                            std::vector<unsigned> &shape,
@@ -160,6 +166,12 @@ class MLIRGen
     {
         return "\%zero = constant 0.00000e+00 : f32";
     }
+
+    std::string genDataType(Layer::Data_Type &d_type);
+    // TODO: (Vinay)
+    std::string genMean1D();
+    std::string genStdDev1D(); 
+    std::string genVariance1D();
 };
 }
 }

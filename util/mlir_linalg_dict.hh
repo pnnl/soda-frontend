@@ -30,6 +30,9 @@ namespace Linalg
 #define DIVF 18
 #define MATMUL 19
 #define TSTORE 20
+#define SUBF 21 
+#define SUBI 22
+#define RSQRT 23
 
 class MLIRDict
 {
@@ -42,6 +45,8 @@ class MLIRDict
         dict.insert({UNDEFINED, "<UNDEFINED>"});
         dict.insert({ADDF, "addf"});
         dict.insert({ADDI, "addi"});
+        dict.insert({SUBF, "subf"});
+        dict.insert({SUBI, "subi"});
         dict.insert({ALLOC, "memref.alloc"});
         dict.insert({CMPLT, "cmpf \"olt\""});
         dict.insert({CONV2D, "linalg.conv"});
@@ -60,6 +65,7 @@ class MLIRDict
         dict.insert({DIVF, "divf"});
         dict.insert({MATMUL, "linalg.matmul"});
         dict.insert({TSTORE, "memref.tensor_store"});
+        dict.insert({RSQRT, "math.rsqrt"});
     }
 
     std::string& operator[](unsigned opr)
