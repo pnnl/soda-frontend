@@ -169,6 +169,13 @@ class Model
         }
         auto& getOutputDim() { return output_dims; }
         auto& getWeightDim() { return w_dims;}
+
+        // TODO, new features for review
+        double epsilon = 0.0;
+
+        auto &getBeta() { return beta; }
+        auto &getGamma() { return gamma; }
+        auto getEpsilon() { return epsilon; }
     };
 
     // Model - Architecture

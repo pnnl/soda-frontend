@@ -335,6 +335,13 @@ void Model::loadArch(std::string &arch_file)
 
             arch.trackLayerConnection(name, inbound_layers);
 
+            // get epsilon
+            if (class_name == "BatchNormalization")
+            {
+                std::string eps = v.second.get<std::string>("config.epsilon");
+                arch.getLayer(name).epsilon = std::stod(eps);
+            }
+
             layer_counter++;
         }
     }
@@ -446,6 +453,10 @@ void Model::extrWeights(hid_t id)
         std::vector<unsigned> dims_vec(dims, dims + ndims);
         std::vector<float> rdata_vec(rdata, rdata + data_size);
 
+	// for (int i = 0; i < ndims; i++) std::cout << dims[i] << " ";
+        // std::cout << "\n";
+        // std::cout << "kernel size: " << rdata_vec.size() << "\n\n";
+
         layer.setWeights(dims_vec, rdata_vec);
     }
     else if (tokens[tokens.size() - 1].find("bias") != std::string::npos)
@@ -462,6 +473,10 @@ void Model::extrWeights(hid_t id)
         std::vector<unsigned> dims_vec(dims, dims + ndims);
         std::vector<float> rdata_vec(rdata, rdata + data_size);
 
+        // for (int i = 0; i < ndims; i++) std::cout << dims[i] << " ";
+        // std::cout << "\n";
+        // std::cout << "beta size: " << rdata_vec.size() << "\n\n";
+
         layer.setBeta(dims_vec, rdata_vec);
     }
     else if (tokens[tokens.size() - 1].find("gamma") != std::string::npos)
@@ -469,6 +484,10 @@ void Model::extrWeights(hid_t id)
         Layer &layer = arch.getLayer(tokens[tokens.size() - 2]);
         std::vector<unsigned> dims_vec(dims, dims + ndims);
         std::vector<float> rdata_vec(rdata, rdata + data_size);
+
+        // for (int i = 0; i < ndims; i++) std::cout << dims[i] << " ";
+        // std::cout << "\n";
+        // std::cout << "gamma size: " << rdata_vec.size() << "\n\n";
 
         layer.setGamma(dims_vec, rdata_vec);
     }
