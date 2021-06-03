@@ -1,9 +1,11 @@
 #ifndef __MODEL_HH__
 #define __MODEL_HH__
 
+#include <cassert>
 #include <fstream>
 #include <iostream>
 #include <string>
+#include <unordered_map>
 #include <vector>
 
 #include "hdf5.h"
@@ -175,6 +177,9 @@ class Model
       protected:
         std::vector<Layer> layers;
 
+        std::unordered_map<std::string, std::vector<std::string>>
+            layer_inputs;
+
         std::string mlir_gen_fn;
       public:
         Architecture() {}
@@ -190,15 +195,25 @@ class Model
             layers.emplace_back(_name, _type);
         }
 
-        Layer& getLayer(std::string &name)
+        // TODO, better to use unordered map here
+        Layer& getLayer(std::string &_name)
         {
             for (auto &layer : layers)
             {
-                if (layer.name == name) { return layer; }
+                if (layer.name == _name) { return layer; }
             }
-            std::cout << name << "\n";
+            std::cout << _name << "\n";
             std::cerr << "Error: layer is not found.\n";
             exit(0);
+            
+        }
+       
+        void trackLayerConnection(std::string &cur_layer,
+                                  std::vector<std::string> &inbounds)
+        {
+            auto map_iter = layer_inputs.find(cur_layer);
+            assert(map_iter == layer_inputs.end());
+            layer_inputs.insert({cur_layer, inbounds});
         }
 
         // auto &getLayers() { return layers; }

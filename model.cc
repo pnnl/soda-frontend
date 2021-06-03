@@ -12,6 +12,29 @@ namespace SODA_FrontEnd
 {
 void Model::Architecture::MLIRGenerator()
 {
+    for (auto i = 0; i < layers.size(); i++)
+    {
+        Layer &cur_layer = layers[i];
+        cur_layer.setID(i);
+
+        std::cerr << "Cur. layer name: " << cur_layer.getName() << "\n";
+
+        // Output input layers to the current layer
+        if (auto map_iter = layer_inputs.find(cur_layer.getName());
+                map_iter != layer_inputs.end())
+        {
+            auto &in_layer_names = map_iter->second;
+            for (auto in_layer_name : in_layer_names)
+            {
+                Layer &in_layer = getLayer(in_layer_name);
+                std::cerr << "    Input layer: "
+                          << in_layer.getName() << "\n";
+            }
+        }
+    }
+
+    /* TODO, temporarily disable the serial translation
+
     // TODO, let's assume a serial connection
     Linalg::MLIRGen mlir_gen(mlir_gen_fn);
     mlir_gen.genInit(layers);
@@ -69,6 +92,8 @@ void Model::Architecture::MLIRGenerator()
         
     }
     mlir_gen.genEnd();
+
+    */
 }
 
 void Model::loadArch(std::string &arch_file)
@@ -114,7 +139,7 @@ void Model::loadArch(std::string &arch_file)
                 arch.addLayer(name, layer_type);
 
                 // TODO, set data type
-		        std::string d_type = v.second.get<std::string>("config.dtype");
+                std::string d_type = v.second.get<std::string>("config.dtype");
                 arch.getLayer(name).setDataType(d_type);
                 arch.getLayer(name).setOutputDim(output_dims);
 
@@ -200,7 +225,6 @@ void Model::loadArch(std::string &arch_file)
 
             std::string d_type = v.second.get<std::string>("config.dtype");
             arch.getLayer(name).setDataType(d_type);
-
 
             if (class_name == "Conv2D" || 
                 class_name == "MaxPooling2D" || 
@@ -288,6 +312,28 @@ void Model::loadArch(std::string &arch_file)
                 std::string act = v.second.get<std::string>("config.activation");
                 arch.getLayer(name).setActivation(act);
             }
+
+            // TODO, I'm not sure if three-level are always true for 
+            // all residual networks.
+            std::vector<std::string> inbound_layers;
+            for (boost::property_tree::ptree::value_type &l1 : 
+                     v.second.get_child("inbound_nodes"))
+            {
+                for (boost::property_tree::ptree::value_type &l2 : 
+                     l1.second)
+                {
+                    for (boost::property_tree::ptree::value_type &l3 : 
+                         l2.second)
+                    {
+                        std::string inbound = l3.second.get_value<std::string>();
+                        inbound_layers.push_back(inbound);
+
+                        break; // TODO, we only consider the 1st ele
+                    }
+                }
+            }
+
+            arch.trackLayerConnection(name, inbound_layers);
 
             layer_counter++;
         }
