@@ -46,7 +46,7 @@ void MLIRGen::genInputLayer(Layer& layer)
     auto& input_dtype = layer.getDataType();
 
     mlir << "    // Layer type: Input\n"
-         << "    // Layer tame: " << layer.getName() << "\n"
+         << "    // Layer name: " << layer.getName() << "\n"
          << "    // Input from Prev. layer: nan\n"
          << "    // Input size: ";
     for (auto dim : input_shape) { mlir << dim << " "; }
@@ -579,110 +579,121 @@ void MLIRGen::genZeroPadding2DLayer(Layer& prev_layer,
     mlir << "    // Layer type: ZeroPadding2D.\n"
          << "    // Layer name: " << cur_layer.getName() << "\n";
 
-    auto prev_layer_id = prev_layer.getID();
     auto cur_layer_id = cur_layer.getID();
-    mlir << "    // Input from layer: " << prev_layer.getName() << "\n";
-    auto input_buffer_reg = variable_map.at(prev_layer.getName());
-    mlir << "    // Input buffer: %"
-         << input_buffer_reg << " : ";
-    auto& input_shape = prev_layer.getOutputDim();
-    auto& input_dtype = prev_layer.getDataType();
-    auto input_memref = genMemRef(input_shape, input_dtype);
-    mlir << input_memref << "\n";
+    // auto prev_layer_id = prev_layer.getID();
+    auto in_layers = cur_layer.getInLayers();
 
-    auto& output_dtype = cur_layer.getDataType();
-    std::vector<unsigned> output_shape;
-    
-    //TODO:(Vinay) Padding for this layer has 4 dims. Auto detect the sizes?
-    // Layer padding
-    auto lp = cur_layer.getPaddings();
-    output_shape.push_back(input_shape[0]);
-    output_shape.push_back(input_shape[1] + 2*lp[0]);
-    output_shape.push_back(input_shape[2] + 2*lp[2]);
-    output_shape.push_back(input_shape[3]);
+    if (in_layers.size() == 1) {
 
-    mlir << "    // Output size: ";
-    for (auto dim : output_shape) { mlir << dim << " "; }
-    mlir << "\n";
-    cur_layer.setOutputDim(output_shape);
+        auto prev_layer_id = in_layers[0]->getID(); 
+        // mlir << "    // Input from layer: " << prev_layer.getName() << "\n";
+        // auto input_buffer_reg = variable_map.at(prev_layer.getName());
+        mlir << "    // Input from layer: " << in_layers[0]->getName() << "\n";
+        auto input_buffer_reg = variable_map.at(in_layers[0]->getName());
+        mlir << "    // Input buffer: %"
+             << input_buffer_reg << " : ";
+        // auto& input_shape = prev_layer.getOutputDim();
+        // auto& input_dtype = prev_layer.getDataType();
+        auto& input_shape = in_layers[0]->getOutputDim();
+        auto& input_dtype = in_layers[0]->getDataType();
+        auto input_memref = genMemRef(input_shape, input_dtype);
+        mlir << input_memref << "\n";
 
-    // Load input memref to a tensor
-    auto &cur_layer_dtype = cur_layer.getDataType();
-    auto tensor0_name = cur_layer.getName() + "_tensor0";
-    const auto [it_var1, flag1] = variable_map.insert({tensor0_name,global_register_tracker++});
-    if(!flag1) {
-        std::cout << "Variable map insertion failure" << std::endl;
+        auto& output_dtype = cur_layer.getDataType();
+        std::vector<unsigned> output_shape;
+        
+        //TODO:(Vinay) Padding for this layer has 4 dims. Auto detect the sizes?
+        // Layer padding
+        auto lp = cur_layer.getPaddings();
+        output_shape.push_back(input_shape[0]);
+        output_shape.push_back(input_shape[1] + 2*lp[0]);
+        output_shape.push_back(input_shape[2] + 2*lp[2]);
+        output_shape.push_back(input_shape[3]);
+
+        mlir << "    // Output size: ";
+        for (auto dim : output_shape) { mlir << dim << " "; }
+        mlir << "\n";
+        cur_layer.setOutputDim(output_shape);
+
+        // Load input memref to a tensor
+        auto &cur_layer_dtype = cur_layer.getDataType();
+        auto tensor0_name = cur_layer.getName() + "_tensor0";
+        const auto [it_var1, flag1] = variable_map.insert({tensor0_name,global_register_tracker++});
+        if(!flag1) {
+            std::cout << "Variable map insertion failure" << std::endl;
+        }
+        auto tensor0_reg = variable_map.at(tensor0_name);
+        auto tensor0_memref = genMemRef2(input_shape, cur_layer_dtype);
+
+        std::string code = "    %" + std::to_string(tensor0_reg)
+                            + " = "
+                            + "memref.tensor_load %"
+                            + std::to_string(input_buffer_reg)
+                            + " : "
+                            + tensor0_memref
+                            + ", #layout, memspace0>";
+        mlir << code << "\n";
+
+        // Pad tensor
+        // TODO: (Vinay), (automate) handle constant variables
+        // TODO: (Vinay), layer data type, int32/f32
+        auto tensor0_tensor = genTensor(input_shape, cur_layer_dtype);
+        code = "    %const0 = constant 0 : f32";
+        mlir << code << "\n";
+        code = "    %pad_value = %const0 : f32";
+        mlir << code << "\n";
+        code = "    %" + std::to_string(tensor0_reg)
+                + " = "
+                + "linalg.pad_tensor %"
+                + std::to_string(tensor0_reg)
+                + " low[" + std::to_string(lp[0])
+                + ", " + std::to_string(lp[1]) + "]"
+                + " high[" + std::to_string(lp[2])
+                + ", " + std::to_string(lp[3]) + "] {\n"
+                + "    ^bb0(%arg0 : index, %arg1 : index):\n"
+                + "      linalg.yield %pad_value : f32\n"
+                + "    } : "
+                + tensor0_tensor
+                + " to "
+                + tensor0_tensor;
+        mlir << code << "\n";
+
+        // TODO: (Vinay) Free above memref? 
+        // Store Tensor to Memref
+        // Get Dim:
+        
+        // auto tensor0Dim_name =  cur_layer.getName() + "_tensor0Dim";
+        // const auto [it_var1, flag2] = variable_map.insert({tensor0Dim_name,global_register_tracker++});
+        // if(!flag2) {
+        //     std::cout << "Variable map insertion failure" << std::endl;
+        // }
+        // auto tensor0Dim_reg = variable_map.at(tensor0_name);
+        // code = "    %" + std::to_string(tensor0Dim_reg) 
+        //         + " dim %" + std::to_string(tensor0_reg)
+
+        // Output SSA
+        const auto [it_var2, flag2] = variable_map.insert({cur_layer.getName(),global_register_tracker++});
+        if(!flag2) {
+            std::cout << "Variable map insertion failure" << std::endl;
+        }
+        auto output_reg = variable_map.at(cur_layer.getName());
+        code = "    %" + std::to_string(output_reg) 
+                + " = " 
+                + "alloc() : "
+                + tensor0_memref + ", #layout, memspace0>" 
+                + "\n"
+                + "    memref.tensor_store %"
+                + std::to_string(tensor0_reg)
+                + ", %"
+                + std::to_string(output_reg)
+                + " : " 
+                + tensor0_memref + ", #layout, memspace0>"
+                + "\n"
+                ;
+        mlir << code; 
+        mlir << "\n";
+
     }
-    auto tensor0_reg = variable_map.at(tensor0_name);
-    auto tensor0_memref = genMemRef2(input_shape, cur_layer_dtype);
-
-    std::string code = "    %" + std::to_string(tensor0_reg)
-                        + " = "
-                        + "memref.tensor_load %"
-                        + std::to_string(input_buffer_reg)
-                        + " : "
-                        + tensor0_memref
-                        + ", #layout, memspace0>";
-    mlir << code << "\n";
-
-    // Pad tensor
-    // TODO: (Vinay), (automate) handle constant variables
-    // TODO: (Vinay), layer data type, int32/f32
-    auto tensor0_tensor = genTensor(input_shape, cur_layer_dtype);
-    code = "    %const0 = constant 0 : f32";
-    mlir << code << "\n";
-    code = "    %pad_value = %const0 : f32";
-    mlir << code << "\n";
-    code = "    %" + std::to_string(tensor0_reg)
-            + " = "
-            + "linalg.pad_tensor %"
-            + std::to_string(tensor0_reg)
-            + " low[" + std::to_string(lp[0])
-            + ", " + std::to_string(lp[1]) + "]"
-            + " high[" + std::to_string(lp[2])
-            + ", " + std::to_string(lp[3]) + "] {\n"
-            + "    ^bb0(%arg0 : index, %arg1 : index):\n"
-            + "      linalg.yield %pad_value : f32\n"
-            + "    } : "
-            + tensor0_tensor
-            + " to "
-            + tensor0_tensor;
-    mlir << code << "\n";
-
-    // TODO: (Vinay) Free above memref? 
-    // Store Tensor to Memref
-    // Get Dim:
-    
-    // auto tensor0Dim_name =  cur_layer.getName() + "_tensor0Dim";
-    // const auto [it_var1, flag2] = variable_map.insert({tensor0Dim_name,global_register_tracker++});
-    // if(!flag2) {
-    //     std::cout << "Variable map insertion failure" << std::endl;
-    // }
-    // auto tensor0Dim_reg = variable_map.at(tensor0_name);
-    // code = "    %" + std::to_string(tensor0Dim_reg) 
-    //         + " dim %" + std::to_string(tensor0_reg)
-
-    // Output SSA
-    const auto [it_var2, flag3] = variable_map.insert({cur_layer.getName(),global_register_tracker++});
-    if(!flag3) {
-        std::cout << "Variable map insertion failure" << std::endl;
-    }
-    auto output_reg = variable_map.at(cur_layer.getName());
-    code = "    %" + std::to_string(output_reg) 
-            + " = " 
-            + "alloc() : "
-            + tensor0_memref + ", #layout, memspace0>" 
-            + "\n"
-            + "    memref.tensor_store %"
-            + std::to_string(tensor0_reg)
-            + ", %"
-            + std::to_string(output_reg)
-            + " : " 
-            + tensor0_memref + ", #layout, memspace0>"
-            + "\n"
-            ;
-    mlir << code; 
-    mlir << "\n";
 }
 
 void MLIRGen::genBatchNormalizationLayer(Layer& prev_layer,
@@ -1097,7 +1108,124 @@ void MLIRGen::genBatchNormalizationLayer(Layer& prev_layer,
 void MLIRGen::genAddLayer(Layer& prev_layer,
                             Layer& cur_layer)
 {
-    mlir << " Add Conv_todo.\n";
+    mlir << " Add Conv_todo.\n\n\n";
+    mlir << "    // Layer type: Add Layer.\n"
+         << "    // Layer name: " << cur_layer.getName() << "\n";
+
+    auto cur_layer_id = cur_layer.getID();
+    auto in_layers = cur_layer.getInLayers();
+    // Current Add Layers can handle only two inputs
+    auto prev_layer_id_0 = in_layers[0]->getID();
+    auto prev_layer_id_1 = in_layers[1]->getID();
+    mlir << "    // Input from layer: " << in_layers[0]->getName() << "\n";
+        auto input_buffer_reg_0 = variable_map.at(in_layers[0]->getName());
+            mlir << "    // Input buffer: %"
+             << input_buffer_reg_0 << " : ";
+    auto& input_shape = in_layers[0]->getOutputDim();
+    auto& input_shape_1 = in_layers[1]->getOutputDim();
+    assert(input_shape_1 == input_shape);
+    auto& input_dtype = in_layers[0]->getDataType();
+    auto input_memref = genMemRef(input_shape, input_dtype);
+    mlir << input_memref << "\n";
+    
+    mlir << "    // Input from layer: " << in_layers[1]->getName() << "\n";
+        auto input_buffer_reg_1 = variable_map.at(in_layers[1]->getName());
+            mlir << "    // Input buffer: %"
+             << input_buffer_reg_1 << " : ";
+    mlir << input_memref << "\n";
+
+    auto& output_dtype = cur_layer.getDataType();
+    auto output_shape = input_shape;
+    // std::vector<unsigned> output_shape = input_shape;
+    // output_shape.push_back(input_shape[0]);
+
+
+    mlir << "    // Output size: ";
+        for (auto dim : output_shape) { mlir << dim << " "; }
+    mlir << "\n";
+    cur_layer.setOutputDim(output_shape);
+
+     // Load input memref to a tensor
+    auto &cur_layer_dtype = cur_layer.getDataType();
+    auto tensor0_name = cur_layer.getName() + "_tensor0";
+    const auto [it_var1, flag1] = variable_map.insert({tensor0_name,global_register_tracker++});
+    if(!flag1) {
+        std::cout << "Variable map insertion failure" << std::endl;
+    }
+    auto tensor0_reg = variable_map.at(tensor0_name);
+    auto tensor0_memref = genMemRef2(input_shape, cur_layer_dtype);
+
+    std::string code = "    %" + std::to_string(tensor0_reg)
+                        + " = "
+                        + "memref.tensor_load %"
+                        + std::to_string(input_buffer_reg_0)
+                        + " : "
+                        + tensor0_memref
+                        + ", #layout, memspace0>";
+    mlir << code << "\n";
+      // --
+    // auto &cur_layer_dtype = cur_layer.getDataType();
+    auto tensor1_name = cur_layer.getName() + "_tensor1";
+    const auto [it_var2, flag2] = variable_map.insert({tensor1_name,global_register_tracker++});
+    if(!flag2) {
+        std::cout << "Variable map insertion failure" << std::endl;
+    }
+    auto tensor1_reg = variable_map.at(tensor1_name);
+    auto tensor1_memref = genMemRef2(input_shape, cur_layer_dtype);
+
+    code = "    %" + std::to_string(tensor1_reg)
+                        + " = "
+                        + "memref.tensor_load %"
+                        + std::to_string(input_buffer_reg_1)
+                        + " : "
+                        + tensor1_memref
+                        + ", #layout, memspace0>";
+    mlir << code << "\n";
+
+    //-------
+    // Add tensors: 
+    auto tensor0_tensor = genTensor(input_shape, cur_layer_dtype);
+    // LHS tensor to store result of ADD: 
+    auto tensor2_name = cur_layer.getName() + "_tensor2";
+    const auto [it_var3, flag3] = variable_map.insert({tensor2_name,global_register_tracker++});
+    if(!flag1) {
+        std::cout << "Variable map insertion failure" << std::endl;
+    }
+    auto tensor2_reg = variable_map.at(tensor2_name);
+    auto tensor2_memref = genMemRef2(input_shape, cur_layer_dtype);
+    code = "    %" + std::to_string(tensor2_reg)
+            + " = "
+            + dict[ADDF]
+            +" %"
+            + std::to_string(tensor0_reg)
+            + ", %"
+            + std::to_string(tensor1_reg)
+            + " : "
+            + tensor0_tensor;
+    mlir << code << "\n";
+
+    // Output SSA
+    const auto [it_var4, flag4] = variable_map.insert({cur_layer.getName(),global_register_tracker++});
+    if(!flag4) {
+        std::cout << "Variable map insertion failure" << std::endl;
+    }
+    auto output_reg = variable_map.at(cur_layer.getName());
+    code = "    %" + std::to_string(output_reg) 
+            + " = " 
+            + "alloc() : "
+            + tensor0_memref + ", #layout, memspace0>" 
+            + "\n"
+            + "    memref.tensor_store %"
+            + std::to_string(tensor2_reg)
+            + ", %"
+            + std::to_string(output_reg)
+            + " : " 
+            + tensor0_memref + ", #layout, memspace0>"
+            + "\n"
+            ;
+    mlir << code; 
+    mlir << "\n";
+
 }
 
 void MLIRGen::genGlobalAveragePooling2DLayer(Layer& prev_layer,

@@ -23,23 +23,29 @@ void Model::Architecture::MLIRGenerator()
         if (auto map_iter = layer_inputs.find(cur_layer.getName());
                 map_iter != layer_inputs.end())
         {
+
             auto &in_layer_names = map_iter->second;
             for (auto in_layer_name : in_layer_names)
             {
                 Layer &in_layer = getLayer(in_layer_name);
                 std::cerr << "    Input layer: "
                           << in_layer.getName() << "\n";
+                
+                // Store pointers to inbound layers in each layer
+                if(cur_layer.getName() != "InputLayer") {
+                    cur_layer.insertInLayer(&in_layer);
+                }
             }
         }
     }
 
-    /* TODO, temporarily disable the serial translation
+    /* TODO, temporarily disable the serial translation */
 
     // TODO, let's assume a serial connection
     Linalg::MLIRGen mlir_gen(mlir_gen_fn);
     mlir_gen.genInit(layers);
     // for (auto i = 0; i < layers.size(); i++)
-    for (auto i = 0; i < 5; i++)
+    for (auto i = 0; i < 18; i++)
     {
         layers[i].setID(i);
         if (layers[i].layer_type == Layer::Layer_Type::Input)
@@ -93,7 +99,7 @@ void Model::Architecture::MLIRGenerator()
     }
     mlir_gen.genEnd();
 
-    */
+    /* */
 }
 
 void Model::loadArch(std::string &arch_file)
@@ -344,6 +350,18 @@ void Model::loadArch(std::string &arch_file)
 
             layer_counter++;
         }
+
+        // Store pointers to inbound layers in each layer.
+        // for( auto &layer : arch.getLayers())
+        // {
+        //     // std::cout << " -- " << layer.getName() << std::endl;
+        //     if(layer.getName() != "InputLayer") 
+        //     {
+                
+
+        //     }
+        // }
+
     }
     catch (std::exception const& e)
     {

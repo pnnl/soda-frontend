@@ -53,13 +53,20 @@ class Model
         
         Layer() {}
         Layer(std::string &_name, Layer_Type &_type) : name(_name), layer_type(_type) {}
-
+        
+        std::vector<Layer *> inbound_layers; 
         unsigned id;
         void setID(unsigned _id) { id = _id; }
         auto getID() { return id; }
 
         std::string name; // Name of the layer
         auto &getName() { return name; }
+        void insertInLayer(Layer * lyr) 
+        {
+            inbound_layers.push_back(lyr);
+        }
+
+        std::vector<Layer *> getInLayers() { return inbound_layers; }
 
         // TODO, tensor/memref consts, check, pre-initialization
         // weights/biases for CONV2D/Dense
@@ -223,7 +230,7 @@ class Model
             layer_inputs.insert({cur_layer, inbounds});
         }
 
-        // auto &getLayers() { return layers; }
+        auto &getLayers() { return layers; }
 
         void MLIRGenerator();
 
