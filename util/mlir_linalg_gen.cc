@@ -32,6 +32,22 @@ void MLIRGen::genInit(std::vector<Layer> &layers)
                  << var_name << " : " << kernel_memref
                  << " = dense<" << tensor_const << ">\n\n";
         }
+        else if (layers[i].getLayerType() == Layer::Layer_Type::BatchNormalization) 
+        {
+            auto cur_layer_dtype = layers[i].getDataType();
+            auto gamma_dim = layers[i].getGammaDim();
+            auto gamma_memref = genMemRef(gamma_dim,
+                                           cur_layer_dtype);
+            auto tensor_const = genTensorConstF1D(layers[i].getGamma(),
+                                                  gamma_dim,
+                                                  cur_layer_dtype);
+            
+            auto var_name = "@" + layers[i].getName() + "_gamma";
+
+            mlir << "memref.global \"private\" constant "
+                 << var_name << " : " << gamma_memref
+                 << " = dense<" << tensor_const << ">\n\n";                                      
+        }
     }
 
     mlir << "func @main() -> ()\n"
@@ -744,22 +760,93 @@ void MLIRGen::genBatchNormalizationLayer(Layer& prev_layer,
         // auto batch_sum_reg = variable_map.at(batch_sum_name);
         // auto batch_sum_memref = genMemRef(batch_sum_shape, cur_layer_dtype);
         
-        auto code = "    %" + std::to_string(output_reg)
+        // Get Mean 
+        auto moving_mean_dims = cur_layer.getMovingMeanDim();    
+        auto code = "    // Moving Mean dimensions -- "
+                        + std::to_string(moving_mean_dims.size());
+        mlir << code << "\n";
+
+        auto moving_mean_val = cur_layer.getMovingMeanData();    
+        code = "    // Moving Mean Val -- "
+                        + std::to_string(moving_mean_val[0]);
+        mlir << code << "\n";
+
+        // Get Variance 
+        auto moving_var_dims = cur_layer.getMovingVarianceDim();    
+        code = "    // Moving Variance dimensions -- "
+                        + std::to_string(moving_var_dims.size());
+        mlir << code << "\n";
+        
+        auto moving_variance_val = cur_layer.getMovingVarianceData();    
+        code = "    // Moving Variance Val -- "
+                        + std::to_string(moving_variance_val[0]);
+        mlir << code << "\n";
+
+        // Get Epsilon Value if present. 
+        code = "    // Epsilon value -- "
+                    + std::to_string(cur_layer.getEpsilon());   
+
+        mlir << code << "\n";
+        
+        
+        auto gamma_vec = cur_layer.getGamma();
+        code = "    // Gamma len -- "
+                    + std::to_string(gamma_vec.size());
+        mlir << code << "\n";   
+
+        auto beta_vec = cur_layer.getBeta();
+        code = "    // Beta len -- "
+                    + std::to_string(beta_vec.size());
+        mlir << code << "\n";
+        
+        code = "    %" + std::to_string(output_reg)
                        + " = "
                        + dict[ALLOC]
                        + "() : "
                        + output_memref;
         mlir << code << "\n";
+        
+        // Load gamma and beta variables
+        auto gamma_name = cur_layer.getName() + "_gamma";
+        auto gamma_dim = cur_layer.getGammaDim();
+        const auto [it_var1a, flag1a] = variable_map.insert({gamma_name,global_register_tracker++});
+        if(!flag1a) {
+            std::cout << "Variable map insertion failure" << std::endl;
+        }
+        auto gamma_reg = variable_map.at(gamma_name);
+        auto gamma_memref = genMemRef(gamma_dim, cur_layer_dtype);
+        code = "    %" + std::to_string(gamma_reg)
+                         + " = memref.get_global @"
+                         + gamma_name
+                         + " : "
+                         + gamma_memref;
+        mlir << code << "\n";
 
+        auto beta_name = cur_layer.getName() + "_beta";
+        auto beta_dim = cur_layer.getBetaDim();
+        const auto [it_var1b, flag1b] = variable_map.insert({beta_name,global_register_tracker++});
+        if(!flag1b) {
+            std::cout << "Variable map insertion failure" << std::endl;
+        }
+        auto beta_reg = variable_map.at(beta_name);
+        auto beta_memref = genMemRef(beta_dim, cur_layer_dtype);
+        code = "    %" + std::to_string(beta_reg)
+                         + " = memref.get_global @"
+                         + beta_name
+                         + " : "
+                         + beta_memref;
+        mlir << code << "\n";
+
+        // -------------------------------------
         code = "    %c0 = constant 0 : index \n";
         code += "    %c1 = constant 1 : index \n";
         // Gen Loop for Sum 
         int num_loops = input_shape.size();
         // inner 3 loops first
-        for (auto i = 1; i < num_loops; i++)
+        for (auto i = 0; i < num_loops; i++)
         {
             std::string one_loop =
-                std::string(4 + (i-1) * 2, ' ')
+                std::string(4 + (i) * 2, ' ')
                 + dict[FOR]
                 + " %" + default_index_str[i] + " = 0 to "
                 + std::to_string(input_shape[i])
@@ -772,231 +859,270 @@ void MLIRGen::genBatchNormalizationLayer(Layer& prev_layer,
         // 1D array for batch sum idx[i] 
         auto batch_sum_1d_name = cur_layer.getName() + "_batch_1d_sum";
         std::vector<unsigned> batch_sum_1d_shape (1,input_shape[0]); 
+        auto batch_sum_1d_memref = genMemRef(batch_sum_1d_shape, cur_layer_dtype);
         // batch_sum_shape[0] = 1; // adding along the batch axis
         const auto [it_var3, flag3] = variable_map.insert({batch_sum_1d_name,global_register_tracker++});
         if(!flag3) {
             std::cout << "Variable map insertion failure" << std::endl;
         }
         auto batch_sum_1d_reg = variable_map.at(batch_sum_1d_name);
-        auto batch_sum_1d_memref = genMemRef(batch_sum_1d_shape, cur_layer_dtype);
-        code += std::string(4 + (num_loops-1) * 2, ' ')
-               + "%" + std::to_string(batch_sum_1d_reg)
-               + " = "
-               + dict[ALLOC]
-               + "() : "
-               + batch_sum_1d_memref
-               + "\n";
+        
+        // code += std::string(4 + (num_loops-1) * 2, ' ')
+        //        + "%" + std::to_string(batch_sum_1d_reg)
+        //        + " = "
+        //        + dict[ALLOC]
+        //        + "() : "
+        //        + batch_sum_1d_memref
+        //        + "\n";
 
-        code += std::string(4 + (num_loops-1) * 2, ' ') + " // Evaluate Mean\n";
-        //outermost loop 
-        std::string loop_open =
-            std::string(4 + (num_loops-1) * 2, ' ')
-            + dict[FOR]
-            + " %" + default_index_str[0] + " = 0 to "
-            + std::to_string(input_shape[0])
-            + " step 1\n"
-            + std::string(4 + (num_loops-1) * 2, ' ') + "{\n";
-        code += loop_open;
+        code += std::string(4 + (num_loops -1   ) * 2, ' ')  
+                + " // Load Mean for Batch Norm\n";
+        std::string mean_bn = "%mean_" + cur_layer.getName();
+        code += std::string(4 + (num_loops -1) * 2, ' ') 
+                + mean_bn 
+                + " = constant "
+                + std::to_string(moving_mean_val[0]) 
+                + " : "
+                + genDataType(cur_layer_dtype)
+                + "\n";
 
-        //load data to temp variable 
-        // TODO: (Vinay) Separate Variable Tracking for temp variables
-        auto load_t0_name = cur_layer.getName() + "_load_t0";
-        const auto [it_var4, flag4] = variable_map.insert({load_t0_name,global_register_tracker++});
-        if(!flag4) {
-            std::cout << "Variable map insertion failure" << std::endl;
-        }
-        auto load_t0_reg = variable_map.at(load_t0_name);
-        std::string tmp_load_str = 
-            std::string(4 + (num_loops)*2, ' ')
-            + "%" + std::to_string(load_t0_reg) 
-            + " = " 
-            + genLoad(default_index_str,
-                        input_buffer_reg,
-                        0,
-                        input_shape.size(),
-                        input_memref) + "\n";
-        code += tmp_load_str;
-        std::string store_t0_str = "%" + std::to_string(load_t0_reg);
-        std::string tmp_store_str = 
-            std::string(4 + (num_loops)*2, ' ')
-            + genStore(default_index_str,
-                               store_t0_str,
-                               batch_sum_1d_reg,
-                               0,
-                               1,
-                               batch_sum_1d_memref)
-                    + "\n"; 
-        code += tmp_store_str;
 
-        std::string loop_close = std::string(4 + (num_loops - 1)*2, ' ') + "}\n";
-        code += loop_close;
+        // code += std::string(4 + (num_loops-1) * 2, ' ') + " // Evaluate Mean\n";
+        // //outermost loop 
+        // std::string loop_open =
+        //     std::string(4 + (num_loops-1) * 2, ' ')
+        //     + dict[FOR]
+        //     + " %" + default_index_str[0] + " = 0 to "
+        //     + std::to_string(input_shape[0])
+        //     + " step 1\n"
+        //     + std::string(4 + (num_loops-1) * 2, ' ') + "{\n";
+        // code += loop_open;
+
+        // //load data to temp variable 
+        // // TODO: (Vinay) Separate Variable Tracking for temp variables
+        // auto load_t0_name = cur_layer.getName() + "_load_t0";
+        // const auto [it_var4, flag4] = variable_map.insert({load_t0_name,global_register_tracker++});
+        // if(!flag4) {
+        //     std::cout << "Variable map insertion failure" << std::endl;
+        // }
+        // auto load_t0_reg = variable_map.at(load_t0_name);
+        // std::string tmp_load_str = 
+        //     std::string(4 + (num_loops)*2, ' ')
+        //     + "%" + std::to_string(load_t0_reg) 
+        //     + " = " 
+        //     + genLoad(default_index_str,
+        //                 input_buffer_reg,
+        //                 0,
+        //                 input_shape.size(),
+        //                 input_memref) + "\n";
+        // code += tmp_load_str;
+        // std::string store_t0_str = "%" + std::to_string(load_t0_reg);
+        // std::string tmp_store_str = 
+        //     std::string(4 + (num_loops)*2, ' ')
+        //     + genStore(default_index_str,
+        //                        store_t0_str,
+        //                        batch_sum_1d_reg,
+        //                        0,
+        //                        1,
+        //                        batch_sum_1d_memref)
+        //             + "\n"; 
+        // code += tmp_store_str;
+
+        // std::string loop_close = std::string(4 + (num_loops - 1)*2, ' ') + "}\n";
+        // code += loop_close;
 
         // Temp Variable for 1D Sum
-        auto sum_t0_name = cur_layer.getName() + "_sum_t0";
-        const auto [it_var5, flag5] = variable_map.insert({sum_t0_name,global_register_tracker++});
-        if(!flag5) {
-            std::cout << "Variable map insertion failure" << std::endl;
-        }
-        auto sum_t0_reg = variable_map.at(sum_t0_name);
-        // auto sum_t0_memref = genMemRef(batch_sum_1d_shape, cur_layer_dtype); // single element
+        // auto sum_t0_name = cur_layer.getName() + "_sum_t0";
+        // const auto [it_var5, flag5] = variable_map.insert({sum_t0_name,global_register_tracker++});
+        // if(!flag5) {
+        //     std::cout << "Variable map insertion failure" << std::endl;
+        // }
+        // auto sum_t0_reg = variable_map.at(sum_t0_name);
+        // // auto sum_t0_memref = genMemRef(batch_sum_1d_shape, cur_layer_dtype); // single element
 
-        // Get Sum1D
-        std::string sum_var = "%sum";
-        unsigned space_scaling = num_loops - 1;
-        code += genSum1D(sum_var, batch_sum_1d_shape[0], batch_sum_1d_reg, 
-                                    batch_sum_1d_memref, cur_layer_dtype, space_scaling);
+        // // Get Sum1D
+        // std::string sum_var = "%sum";
+        // unsigned space_scaling = num_loops - 1;
+        // code += genSum1D(sum_var, batch_sum_1d_shape[0], batch_sum_1d_reg, 
+        //                             batch_sum_1d_memref, cur_layer_dtype, space_scaling);
 
-        // Get Sum Length
-        std::string arr_length = "%arr_len";
-        code += std::string(4 + (num_loops - 1)*2, ' ') 
-                + arr_length
-                + " = constant "
-                + std::to_string(batch_sum_1d_shape[0])
-                + " : "
-                + genDataType(cur_layer_dtype)
-                + "\n";
+        // // Get Sum Length
+        // std::string arr_length = "%arr_len";
+        // code += std::string(4 + (num_loops - 1)*2, ' ') 
+        //         + arr_length
+        //         + " = constant "
+        //         + std::to_string(batch_sum_1d_shape[0])
+        //         + " : "
+        //         + genDataType(cur_layer_dtype)
+        //         + "\n";
 
-        // Get Mean for Arr: 
-        std::string mean_var = "%mean";
-        code += std::string(4 + (num_loops - 1)*2, ' ') 
-                + mean_var
-                + " = "
-                + dict[DIVF]
-                + " "
-                + arr_length
-                + " , "
-                + sum_var
-                + " : "
-                + genDataType(cur_layer_dtype)
-                + "\n";
+        // // Get Mean for Arr: 
+        // std::string mean_var = "%mean";
+        // code += std::string(4 + (num_loops - 1)*2, ' ') 
+        //         + mean_var
+        //         + " = "
+        //         + dict[DIVF]
+        //         + " "
+        //         + arr_length
+        //         + " , "
+        //         + sum_var
+        //         + " : "
+        //         + genDataType(cur_layer_dtype)
+        //         + "\n";
 
         // --------------------------------------------------------------
         // 1D array for batch var_sum idx[i]
-        auto batch_var_sum_1d_name = cur_layer.getName() + "_batch_1d_var_sum";
-        std::vector<unsigned> batch_var_sum_1d_shape (1,input_shape[0]); 
-        // batch_sum_shape[0] = 1; // adding along the batch axis
-        const auto [it_var6, flag6] = variable_map.insert({batch_var_sum_1d_name,global_register_tracker++});
-        if(!flag6) {
-            std::cout << "Variable map insertion failure" << std::endl;
-        }
-        auto batch_var_sum_1d_reg = variable_map.at(batch_var_sum_1d_name);
-        auto batch_var_sum_1d_memref = genMemRef(batch_var_sum_1d_shape, cur_layer_dtype);
-        code += std::string(4 + (num_loops-1) * 2, ' ')
-               + "%" + std::to_string(batch_var_sum_1d_reg)
-               + " = "
-               + dict[ALLOC]
-               + "() : "
-               + batch_var_sum_1d_memref
-               + "\n";
+        // auto batch_var_sum_1d_name = cur_layer.getName() + "_batch_1d_var_sum";
+        // std::vector<unsigned> batch_var_sum_1d_shape (1,input_shape[0]); 
+        // // batch_sum_shape[0] = 1; // adding along the batch axis
+        // const auto [it_var6, flag6] = variable_map.insert({batch_var_sum_1d_name,global_register_tracker++});
+        // if(!flag6) {
+        //     std::cout << "Variable map insertion failure" << std::endl;
+        // }
+        // auto batch_var_sum_1d_reg = variable_map.at(batch_var_sum_1d_name);
+        // auto batch_var_sum_1d_memref = genMemRef(batch_var_sum_1d_shape, cur_layer_dtype);
+        // code += std::string(4 + (num_loops-1) * 2, ' ')
+        //        + "%" + std::to_string(batch_var_sum_1d_reg)
+        //        + " = "
+        //        + dict[ALLOC]
+        //        + "() : "
+        //        + batch_var_sum_1d_memref
+        //        + "\n";
 
-        code += std::string(4 + (num_loops-1) * 2, ' ') + " // Evaluate Variance\n";
-        code += std::string(4 + (num_loops-1) * 2, ' ') + " // (x[i] - u)^2 \n";
-        std::string loop_open_var =
-            std::string(4 + (num_loops-1) * 2, ' ')
-            + dict[FOR]
-            + " %" + default_index_str[0] + " = 0 to "
-            + std::to_string(input_shape[0])
-            + " step 1\n"
-            + std::string(4 + (num_loops-1) * 2, ' ') + "{\n";
-        code += loop_open_var;
+        // code += std::string(4 + (num_loops-1) * 2, ' ') + " // Evaluate Variance\n";
+        // code += std::string(4 + (num_loops-1) * 2, ' ') + " // (x[i] - u)^2 \n";
+        // std::string loop_open_var =
+        //     std::string(4 + (num_loops-1) * 2, ' ')
+        //     + dict[FOR]
+        //     + " %" + default_index_str[0] + " = 0 to "
+        //     + std::to_string(input_shape[0])
+        //     + " step 1\n"
+        //     + std::string(4 + (num_loops-1) * 2, ' ') + "{\n";
+        // code += loop_open_var;
 
-        //load data to temp variable 
-        auto load_t1_name = cur_layer.getName() + "_load_t1";
-        const auto [it_var7, flag7] = variable_map.insert({load_t1_name,global_register_tracker++});
-        if(!flag7) {
-            std::cout << "Variable map insertion failure" << std::endl;
-        }
-        auto load_t1_reg = variable_map.at(load_t1_name);
-        tmp_load_str = std::string(4 + (num_loops)*2, ' ')
-                        + "%" + std::to_string(load_t1_reg) 
-                        + " = " 
-                        + genLoad(default_index_str,
-                                    batch_var_sum_1d_reg,
-                                    0,
-                                    batch_var_sum_1d_shape.size(),
-                                    batch_var_sum_1d_memref) + "\n";
-        code += tmp_load_str;
+        // //load data to temp variable 
+        // auto load_t1_name = cur_layer.getName() + "_load_t1";
+        // const auto [it_var7, flag7] = variable_map.insert({load_t1_name,global_register_tracker++});
+        // if(!flag7) {
+        //     std::cout << "Variable map insertion failure" << std::endl;
+        // }
+        // auto load_t1_reg = variable_map.at(load_t1_name);
+        // tmp_load_str = std::string(4 + (num_loops)*2, ' ')
+        //                 + "%" + std::to_string(load_t1_reg) 
+        //                 + " = " 
+        //                 + genLoad(default_index_str,
+        //                             batch_var_sum_1d_reg,
+        //                             0,
+        //                             batch_var_sum_1d_shape.size(),
+        //                             batch_var_sum_1d_memref) + "\n";
+        // code += tmp_load_str;
         
-        // (x[i] - u)^2
-        auto diff_t0_name = cur_layer.getName() + "_diff_t0";
-        const auto [it_var8, flag8] = variable_map.insert({diff_t0_name,global_register_tracker++});
-        if(!flag8) {
-            std::cout << "Variable map insertion failure" << std::endl;
-        }
-        auto diff_t0_reg = variable_map.at(diff_t0_name);
-        code += std::string(4 + (num_loops)*2, ' ') 
-                + "%" + std::to_string(diff_t0_reg) 
-                + " = "
-                + dict[SUBF]
-                + " %"
-                + std::to_string(load_t1_reg)
-                + ", "
-                + mean_var
+        // // (x[i] - u)^2
+        // auto diff_t0_name = cur_layer.getName() + "_diff_t0";
+        // const auto [it_var8, flag8] = variable_map.insert({diff_t0_name,global_register_tracker++});
+        // if(!flag8) {
+        //     std::cout << "Variable map insertion failure" << std::endl;
+        // }
+        // auto diff_t0_reg = variable_map.at(diff_t0_name);
+        // code += std::string(4 + (num_loops)*2, ' ') 
+        //         + "%" + std::to_string(diff_t0_reg) 
+        //         + " = "
+        //         + dict[SUBF]
+        //         + " %"
+        //         + std::to_string(load_t1_reg)
+        //         + ", "
+        //         + mean_var
+        //         + " : "
+        //         + genDataType(cur_layer_dtype)
+        //         + "\n";
+        
+        // auto sq_t0_name = cur_layer.getName() + "_sq_t0";
+        // const auto [it_var9, flag9] = variable_map.insert({sq_t0_name,global_register_tracker++});
+        // if(!flag9) {
+        //     std::cout << "Variable map insertion failure" << std::endl;
+        // }
+        // auto sq_t0_reg = variable_map.at(sq_t0_name);
+        // // TODO: (Vinay) square, cube
+        // code += std::string(4 + (num_loops)*2, ' ')
+        //         + "%" + std::to_string(sq_t0_reg)
+        //         + " = "
+        //         + dict[MULF] 
+        //         + " %"
+        //         + std::to_string(diff_t0_reg)
+        //         + ", %"
+        //         + std::to_string(diff_t0_reg)
+        //         + " : "
+        //         + genDataType(cur_layer_dtype)
+        //         + "\n";
+        // // Store
+        // std::string store_t1_str = "%" + std::to_string(sq_t0_reg);
+        // code += std::string(4 + (num_loops)*2, ' ')
+        //         + genStore(default_index_str,
+        //                        store_t1_str,
+        //                        batch_var_sum_1d_reg,
+        //                        0,
+        //                        1,
+        //                        batch_var_sum_1d_memref)
+        //         + "\n"; 
+        // loop_close = std::string(4 + (num_loops - 1)*2, ' ') + "}\n";
+        // code += loop_close;
+        
+        // // Gen Sum1D
+        // sum_var = "%sumVar";
+        // space_scaling = num_loops - 1;
+        // code += genSum1D(sum_var, batch_var_sum_1d_shape[0], batch_var_sum_1d_reg, 
+        //                             batch_var_sum_1d_memref, cur_layer_dtype, space_scaling);
+        // // Gen Var
+        // std::string variance_var = "%var";
+        // code += std::string(4 + (num_loops - 1)*2, ' ') 
+        //         + variance_var
+        //         + " = "
+        //         + dict[DIVF]
+        //         + " "
+        //         + arr_length
+        //         + " , "
+        //         + sum_var
+        //         + " : "
+        //         + genDataType(cur_layer_dtype)
+        //         + "\n";
+
+        // --------------------------------------------------------------
+        code += std::string(4 + (num_loops -1) * 2, ' ') 
+                + " // Load Variance     for Batch Norm\n";
+        std::string variance_bn = "%variance_" + cur_layer.getName();
+        code += std::string(4 + (num_loops -1) * 2, ' ') 
+                + variance_bn 
+                + " = constant "
+                + std::to_string(moving_variance_val[0]) 
+                + " : "
+                + genDataType(cur_layer_dtype)
+                + "\n";
+
+        // Var - epsilon
+        code += std::string(4 + (num_loops -1) * 2, ' ') 
+                + " // Load Epsilon for Batch Norm\n";
+        std::string epsilon_bn = "%epsilon_" + cur_layer.getName();
+        code += std::string(4 + (num_loops -1) * 2, ' ') 
+                + epsilon_bn 
+                + " = constant "
+                + std::to_string(cur_layer.getEpsilon())
                 + " : "
                 + genDataType(cur_layer_dtype)
                 + "\n";
         
-        auto sq_t0_name = cur_layer.getName() + "_sq_t0";
-        const auto [it_var9, flag9] = variable_map.insert({sq_t0_name,global_register_tracker++});
-        if(!flag9) {
-            std::cout << "Variable map insertion failure" << std::endl;
-        }
-        auto sq_t0_reg = variable_map.at(sq_t0_name);
-        // TODO: (Vinay) square, cube
-        code += std::string(4 + (num_loops)*2, ' ')
-                + "%" + std::to_string(sq_t0_reg)
-                + " = "
-                + dict[MULF] 
-                + " %"
-                + std::to_string(diff_t0_reg)
-                + ", %"
-                + std::to_string(diff_t0_reg)
-                + " : "
-                + genDataType(cur_layer_dtype)
-                + "\n";
-        // Store
-        std::string store_t1_str = "%" + std::to_string(sq_t0_reg);
-        code += std::string(4 + (num_loops)*2, ' ')
-                + genStore(default_index_str,
-                               store_t1_str,
-                               batch_var_sum_1d_reg,
-                               0,
-                               1,
-                               batch_var_sum_1d_memref)
-                + "\n"; 
-        loop_close = std::string(4 + (num_loops - 1)*2, ' ') + "}\n";
-        code += loop_close;
-        
-        // Gen Sum1D
-        sum_var = "%sumVar";
-        space_scaling = num_loops - 1;
-        code += genSum1D(sum_var, batch_var_sum_1d_shape[0], batch_var_sum_1d_reg, 
-                                    batch_var_sum_1d_memref, cur_layer_dtype, space_scaling);
-        // Gen Var
-        std::string variance_var = "%var";
-        code += std::string(4 + (num_loops - 1)*2, ' ') 
-                + variance_var
-                + " = "
-                + dict[DIVF]
-                + " "
-                + arr_length
-                + " , "
-                + sum_var
-                + " : "
-                + genDataType(cur_layer_dtype)
-                + "\n";
+        // std::string variance_sub_ep_var = "%var_sub_ep";
 
         // Evaluate for each array element and store
         code += std::string(4 + (num_loops-1) * 2, ' ') + " // Store Normalized Value\n";
-        //Open loop 
-        loop_open =
-            std::string(4 + (num_loops-1) * 2, ' ')
-            + dict[FOR]
-            + " %" + default_index_str[0] + " = 0 to "
-            + std::to_string(input_shape[0])
-            + " step 1\n"
-            + std::string(4 + (num_loops-1) * 2, ' ') + "{\n";
-        code += loop_open;
+        // //Open loop 
+        // std::string loop_open =
+        //     std::string(4 + (num_loops-1) * 2, ' ')
+        //     + dict[FOR]
+        //     + " %" + default_index_str[0] + " = 0 to "
+        //     + std::to_string(input_shape[0])
+        //     + " step 1\n"
+        //     + std::string(4 + (num_loops-1) * 2, ' ') + "{\n";
+        // code += loop_open;
 
         //load data to temp variable
         auto load_t2_name = cur_layer.getName() + "_load_t2";
@@ -1005,14 +1131,17 @@ void MLIRGen::genBatchNormalizationLayer(Layer& prev_layer,
             std::cout << "Variable map insertion failure" << std::endl;
         }
         auto load_t2_reg = variable_map.at(load_t2_name);
-        tmp_load_str = std::string(4 + (num_loops)*2, ' ')
+        std::string tmp_load_str = std::string(4 + (num_loops)*2, ' ')
                         + "%" + std::to_string(load_t2_reg)
                         + " = " 
                         + genLoad(default_index_str,
-                                    batch_sum_1d_reg,
+                                    // batch_sum_1d_reg,
+                                    input_buffer_reg, 
                                     0,
-                                    batch_sum_1d_shape.size(),
-                                    batch_sum_1d_memref) + "\n";
+                                    // batch_sum_1d_shape.size(),
+                                    input_shape.size(),
+                                    input_memref) + "\n";
+                                    // batch_sum_1d_memref) + "\n";
         code += tmp_load_str;
 
         auto diff_t1_name = cur_layer.getName() + "_diff_t1";
@@ -1028,16 +1157,35 @@ void MLIRGen::genBatchNormalizationLayer(Layer& prev_layer,
                 + " %"
                 + std::to_string(load_t2_reg)
                 + ", "
-                + mean_var
+                + mean_bn
                 + " : "
                 + genDataType(cur_layer_dtype)
                 + "\n";
 
         // Sqrt Variance and Epsilon : Latter not implemented
         // TODO: Implement for epsilon
-        auto rsqrt_t0_name = cur_layer.getName() + "_rsqrt_t0";
-        const auto [it_var12, flag12] = variable_map.insert({rsqrt_t0_name,global_register_tracker++});
+        auto diff_t2_name = cur_layer.getName() + "_diff_t2";
+        const auto [it_var12, flag12] = variable_map.insert({diff_t2_name,global_register_tracker++});
         if(!flag12) {
+            std::cout << "Variable map insertion failure" << std::endl;
+        }
+        auto diff_t2_reg = variable_map.at(diff_t2_name);
+        code += std::string(4 + (num_loops)*2, ' ') 
+                + "%" + std::to_string(diff_t2_reg) 
+                + " = "
+                + dict[SUBF]
+                + " %"
+                // + std::to_string(load_t2_reg)
+                + epsilon_bn
+                + ", "
+                + variance_bn
+                + " : "
+                + genDataType(cur_layer_dtype)
+                + "\n";
+
+        auto rsqrt_t0_name = cur_layer.getName() + "_rsqrt_t0";
+        const auto [it_var13, flag13] = variable_map.insert({rsqrt_t0_name,global_register_tracker++});
+        if(!flag13) {
             std::cout << "Variable map insertion failure" << std::endl;
         }
         auto rsqrt_t0_reg = variable_map.at(rsqrt_t0_name);
@@ -1046,13 +1194,15 @@ void MLIRGen::genBatchNormalizationLayer(Layer& prev_layer,
                 + " = "
                 + dict[RSQRT]
                 + " "
-                + variance_var
+                // + variance_bn
+                + ", %"
+                + std::to_string(diff_t2_reg)
                 + " : "
                 + genDataType(cur_layer_dtype)
                 + "\n";
         
         auto mult_t0_name = cur_layer.getName() + "_mult_t0";
-        const auto [it_var13, flag13] = variable_map.insert({mult_t0_name,global_register_tracker++});
+        const auto [it_var14, flag14] = variable_map.insert({mult_t0_name,global_register_tracker++});
         if(!flag13) {
             std::cout << "Variable map insertion failure" << std::endl;
         }
@@ -1069,8 +1219,86 @@ void MLIRGen::genBatchNormalizationLayer(Layer& prev_layer,
                 + genDataType(cur_layer_dtype)
                 + "\n";
         
+        // TODO Scale and Shift. 
+        // Load Gamma variable: 
+        auto load_t3_name = cur_layer.getName() + "_load_t3";
+        const auto [it_var15, flag15] = variable_map.insert({load_t3_name,global_register_tracker++});
+        if(!flag15) {
+            std::cout << "Variable map insertion failure" << std::endl;
+        }
+        auto load_t3_reg = variable_map.at(load_t3_name);
+        tmp_load_str = std::string(4 + (num_loops)*2, ' ')
+                        + "%" + std::to_string(load_t3_reg)
+                        + " = " 
+                        + genLoad(default_index_str,
+                                    // batch_sum_1d_reg,
+                                    gamma_reg, 
+                                    3,
+                                    // batch_sum_1d_shape.size(),
+                                    input_shape.size(),
+                                    gamma_memref) + "\n";
+                                    // batch_sum_1d_memref) + "\n";
+        code += tmp_load_str;
+
+        // Load Beta variable:
+        auto load_t4_name = cur_layer.getName() + "_load_t4";
+        const auto [it_var16, flag16] = variable_map.insert({load_t4_name,global_register_tracker++});
+        if(!flag16) {
+            std::cout << "Variable map insertion failure" << std::endl;
+        }
+        auto load_t4_reg = variable_map.at(load_t4_name);
+        tmp_load_str = std::string(4 + (num_loops)*2, ' ')
+                        + "%" + std::to_string(load_t4_reg)
+                        + " = " 
+                        + genLoad(default_index_str,
+                                    // batch_sum_1d_reg,
+                                    beta_reg, 
+                                    3,
+                                    // batch_sum_1d_shape.size(),
+                                    input_shape.size(),
+                                    beta_memref) + "\n";
+                                    // batch_sum_1d_memref) + "\n";
+        code += tmp_load_str;
+        // Apply scale: 
+        auto mult_t1_name = cur_layer.getName() + "_mult_t1";
+        const auto [it_var17, flag17] = variable_map.insert({mult_t1_name,global_register_tracker++});
+        if(!flag17) {
+            std::cout << "Variable map insertion failure" << std::endl;
+        }
+        auto mult_t1_reg = variable_map.at(mult_t1_name);
+        code += std::string(4 + (num_loops)*2, ' ')
+                + "%" + std::to_string(mult_t1_reg)
+                + " = "
+                + dict[MULF]
+                + " %"
+                + std::to_string(load_t3_reg)
+                + ", %"
+                + std::to_string(mult_t0_reg)
+                + " : "
+                + genDataType(cur_layer_dtype)
+                + "\n";
+        
+        // Apply shift: 
+        auto add_t0_name = cur_layer.getName() + "_add_t0";
+        const auto [it_var18, flag18] = variable_map.insert({add_t0_name,global_register_tracker++});
+        if(!flag18) {
+            std::cout << "Variable map insertion failure" << std::endl;
+        }
+        auto add_t0_reg = variable_map.at(add_t0_name);
+        code += std::string(4 + (num_loops)*2, ' ')
+                + "%" + std::to_string(add_t0_reg)
+                + " = "
+                + dict[ADDF]
+                + " %"
+                + std::to_string(add_t0_reg)
+                + ", %"
+                + std::to_string(mult_t1_reg)
+                + " : "
+                + genDataType(cur_layer_dtype)
+                + "\n";
+
         // Store result 
-        std::string store_t2_str = "%" + std::to_string(mult_t0_reg);
+        std::string store_t2_str = "%" + std::to_string(add_t0_reg);
         code += std::string(4 + (num_loops)*2, ' ')
                 + genStore(default_index_str,
                            store_t2_str,
@@ -1087,9 +1315,7 @@ void MLIRGen::genBatchNormalizationLayer(Layer& prev_layer,
             code += loop_nest;
         }
         code += "\n";
-
         mlir << code << "\n";
-
     }
     else
     {
@@ -1101,8 +1327,6 @@ void MLIRGen::genBatchNormalizationLayer(Layer& prev_layer,
         mlir << code << "\n";
 
     }
-
-
 }
 
 void MLIRGen::genAddLayer(Layer& prev_layer,
@@ -1446,6 +1670,38 @@ std::string MLIRGen::genTensor(std::vector<unsigned> &dims,
         default :
             // TODO: Proper exit handling
             exit (EXIT_FAILURE);
+    }
+
+    return ret;
+}
+
+std::string MLIRGen::genTensorConstF1D(std::vector<float> &vals,
+                                       std::vector<unsigned> &dims,
+                                       Layer::Data_Type &d_type)
+{
+    unsigned size_check = 1;
+    for (auto dim : dims) size_check *= dim;
+    assert(size_check);
+    assert(dims.size() == 1);
+
+    std::string ret = "";
+
+    for (int m = 0; m < dims[0]; m++)
+    {
+        auto index = m;
+        if (m == 0)
+        {
+            ret += ("[" + std::to_string(vals[index]) + ",");
+        }
+        // else if (m > 0 && m < dims[3] - 1)
+        else if (m > 0 && m < dims[0] - 1)
+        {
+            ret += (std::to_string(vals[index]) + ",");
+        }
+        else
+        {
+            ret += (std::to_string(vals[index]) + "]");
+        }
     }
 
     return ret;

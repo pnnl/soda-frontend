@@ -79,7 +79,9 @@ class MLIRGen
     // TODO: (Vinay) FIX this and use just sinble genMemRef
     std::string genMemRef2(std::vector<unsigned> &dims,
                           Layer::Data_Type &d_type);
-
+    std::string genTensorConstF1D(std::vector<float> &vals,
+                                  std::vector<unsigned> &dims,
+                                  Layer::Data_Type &d_type);
     std::string genTensorConstF4D(std::vector<float> &vals,
                                   std::vector<unsigned> &dims,
                                   Layer::Data_Type &d_type);

@@ -179,9 +179,14 @@ class Model
 
         // TODO, new features for review
         double epsilon = 0.0;
-
+        auto &getMovingMeanDim() { return moving_mean_dims;}
+        auto &getMovingMeanData() { return moving_mean;}
+        auto &getMovingVarianceDim() { return moving_variance_dims;}
+        auto &getMovingVarianceData() { return moving_variance;}
         auto &getBeta() { return beta; }
+        auto &getBetaDim() {return beta_dims;}
         auto &getGamma() { return gamma; }
+        auto &getGammaDim() {return gamma_dims;}
         auto getEpsilon() { return epsilon; }
     };
 

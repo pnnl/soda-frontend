@@ -10,4 +10,4 @@ TARGET	:= soda_frontend
 all:
 	$(CC) $(FLGAS) -I$(HDF5Lib) $(SOURCE) -o $(TARGET) $(LD)
 clean:
-	rm -rf $(TARGET)
+	rm -rf $(TARGET)	
