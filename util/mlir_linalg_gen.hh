@@ -108,13 +108,7 @@ class MLIRGen
                         unsigned,
                         std::string&);
 
-    std::string genStore(std::vector<std::string>&,
-                         std::string&,
-                         unsigned,
-                         unsigned,
-                         unsigned,
-                         std::string&);
-    std::string genStoreV(std::vector<std::string> &,
+    std::string genStore(std::vector<std::string> &,
                           std::string &,
                           unsigned,
                           std::vector<unsigned>,

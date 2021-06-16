@@ -1299,12 +1299,15 @@ void MLIRGen::genBatchNormalizationLayer(Layer& prev_layer,
 
         // Store result 
         std::string store_t2_str = "%" + std::to_string(add_t0_reg);
+        // IDX vector 
+        std::vector<unsigned> dflt_idx_vector_seq;
+        for (int i=0; i < output_shape.size(); i++)
+            dflt_idx_vector_seq.push_back(i);
         code += std::string(4 + (num_loops)*2, ' ')
                 + genStore(default_index_str,
                            store_t2_str,
                            output_reg,
-                           0,
-                           output_shape.size(),
+                           dflt_idx_vector_seq,
                            output_memref)
                 + "\n";
        
@@ -1644,7 +1647,7 @@ void MLIRGen::genGlobalAveragePooling2DLayer(Layer& prev_layer,
     dflt_idx_vector_seq.push_back(3);
 
     code += std::string(4 + (num_loops)*2, ' ')
-            + genStoreV(default_index_str,
+            + genStore(default_index_str,
                         temp_r_var,
                         output_reg,
                         dflt_idx_vector_seq, 
@@ -2106,16 +2109,22 @@ std::string MLIRGen::genRelu(unsigned buffer_id,
            dtype + "\n");
 
     // Gen if-store
-    ret += (std::string(4 + num_of_loops * 2, ' ') +
-            dict[IF] + " \%cond\n" +
-            std::string(4 + num_of_loops * 2, ' ') + "{\n" +
-            std::string(4 + (num_of_loops + 1) * 2, ' ') +
-            genStore(default_index_str,
-                // zero, buffer_id, 0, num_of_loops - 1, shape_memref) + "\n" +
-                zero, buffer_id, 0, num_of_loops, shape_memref) + "\n" +
-            // genStore(zero, buffer_id, 0, num_of_loops - 1, shape_memref) + "\n" +
-            // genStore(zero, buffer_id, 0, num_of_loops, shape_memref) + "\n" +
-            std::string(4 + num_of_loops * 2, ' ') + "}\n");
+    // Idx vector
+    std::vector<unsigned> dflt_idx_vector_seq;
+    for(int i = 0; i < num_of_loops; i++)
+        dflt_idx_vector_seq.push_back(i);
+    ret += (std::string(4 + num_of_loops * 2, ' ') 
+            + dict[IF] + " \%cond\n" 
+            + std::string(4 + num_of_loops * 2, ' ') 
+            + "{\n" 
+            + std::string(4 + (num_of_loops + 1) * 2, ' ') 
+            + genStore(default_index_str,
+                      zero, 
+                      buffer_id, 
+                      dflt_idx_vector_seq, 
+                      shape_memref) 
+            + "\n" 
+            + std::string(4 + num_of_loops * 2, ' ') + "}\n");
 
     // Gen loop end
     for (auto i = num_of_loops - 1; i >= 0; i--)
@@ -2179,32 +2188,7 @@ std::string MLIRGen::genLoad(std::vector<std::string> &index_str,
     return ret;
 }
 
-// TODO, this function is not generic enough
 std::string MLIRGen::genStore(std::vector<std::string> &index_str,
-                              std::string &val,
-                              unsigned buffer_id,
-                              unsigned index_start,
-                              unsigned index_end,
-                              std::string& mem_ref)
-{
-    std::string ret = dict[STORE] + " " + val + ", "
-                    + "%" + std::to_string(buffer_id) + "[";
-    for (int i = index_start; i < index_end; i++)
-    {
-        ret += ("%" + default_index_str[i]);
-        if ((index_end - 1) > i)
-            ret += (", ");
-        else
-            ret += ("] ");
-    }
-    // ret += ("%" + index_str[index_end] + "] : " + mem_ref);
-    ret += (" : " + mem_ref);
-
-    return ret;
-}
-
-// TODO, this function is not generic enough
-std::string MLIRGen::genStoreV(std::vector<std::string> &index_str,
                               std::string &val,
                               unsigned buffer_id,
                               std::vector<unsigned> idx_vec_seq,
@@ -2217,10 +2201,7 @@ std::string MLIRGen::genStoreV(std::vector<std::string> &index_str,
         ret += ("%" + default_index_str[*itr]);
         if (itr < idx_vec_seq.end() - 1)
             ret += (", ");
-        // else
-        //     ret += ("] ");
     }
-    // ret += ("%" + index_str[index_end] + "] : " + mem_ref);
     ret += ("] : " + mem_ref);
     return ret;
 }
@@ -2339,18 +2320,19 @@ std::string MLIRGen::genExp(unsigned buffer_id,
                   ;
     res +=  exp_eval_str;
     // Store val
+    // IDX vector
+    std::vector<unsigned> dflt_idx_vector_seq;
+    for(int i = 0; i < shape.size(); i++)
+        dflt_idx_vector_seq.push_back(i);
     auto store_str = std::string(4 + shape.size() * 2, ' ')
-                //   + genStore(eval_v_str, res_buffer_id, 0, shape.size() - 1, shape_memref )
                   + genStore(default_index_str,
                             eval_v_str,
                             res_buffer_id,
-                            0,
-                            shape.size(),
+                            dflt_idx_vector_seq,
                             shape_memref )
                   + "\n";
     res += store_str;
 
-    // res += " /* -- Shape.size : " + std::to_string(shape.size()) + "*/ \n";
     // Loop body end
     for (int i = shape.size() - 1; i >= 0; i--)
     {
@@ -2441,14 +2423,14 @@ std::string MLIRGen::genReduceSum1D(unsigned exp_buf,
     res += load_str;
 
     // Store data to temp row_vector
+    // Idx vector
+    std::vector<unsigned> dflt_idx_vector_seq;
+    dflt_idx_vector_seq.push_back(1);
     auto store_str = std::string(4 + space_scaling * 2, ' ')
-                    // TODO: Fix this hard coded part.
-                    // + genStore(rstmp, row_buf, 1, shape.size(), shape1d_memref)
                     + genStore(default_index_str,
                                rstmp,
                                row_buf,
-                               1,
-                               2,
+                                dflt_idx_vector_seq,
                                shape1d_memref)
                     + "\n"
                     ;
@@ -2732,12 +2714,16 @@ std::string MLIRGen::genExpNorm(unsigned res_buf,
 
     res += norm_val;
     // store value to result buf
+    // Idx vector
+    std::vector<unsigned> dflt_idx_vector_seq;
+    for(int i = 0; i < 2; i++)
+        dflt_idx_vector_seq.push_back(i);
+
     std::string store_res = std::string(4 + space_scaling * 2, ' ')
                             + genStore(default_index_str,
                                        tnorm2,
                                        res_buf,
-                                       0,
-                                       2,
+                                       dflt_idx_vector_seq,
                                        shape2d_memref)
                             + " \n"
                             ;
