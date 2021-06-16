@@ -17,7 +17,7 @@ void Model::Architecture::MLIRGenerator()
         Layer &cur_layer = layers[i];
         cur_layer.setID(i);
 
-        std::cerr << "Cur. layer name: " << cur_layer.getName() << "\n";
+        std::cerr << "Cur. layer name: " << cur_layer.getName() << ", ID: " << i <<"\n";
 
         // Output input layers to the current layer
         if (auto map_iter = layer_inputs.find(cur_layer.getName());
@@ -45,9 +45,10 @@ void Model::Architecture::MLIRGenerator()
     Linalg::MLIRGen mlir_gen(mlir_gen_fn);
     mlir_gen.genInit(layers);
     // for (auto i = 0; i < layers.size(); i++)
-    for (auto i = 0; i < 18; i++)
+    for (auto i = 0; i < 176; i++)
     {
         layers[i].setID(i);
+        // mlir_gen.genPrintLayerId(i);
         if (layers[i].layer_type == Layer::Layer_Type::Input)
         {
             mlir_gen.genInputLayer(layers[i]);
@@ -97,7 +98,14 @@ void Model::Architecture::MLIRGenerator()
         }
         
     }
+    // Print Layer Names: 
+    for (auto i = 0; i < layers.size(); i++) {
+        mlir_gen.genPrintLayerId(i);
+        mlir_gen.genPrintLayerName(layers[i]);
+    }
     mlir_gen.genEnd();
+
+   
 
     /* */
 }
@@ -114,7 +122,6 @@ void Model::loadArch(std::string &arch_file)
         BOOST_FOREACH(boost::property_tree::ptree::value_type &v,
                       pt.get_child("config.layers"))
         {
-            std::cout << " -- layer_counter: " << layer_counter << std::endl; 
             // We need to construct the input layer first
             // Sometimes, input layer is not explicitly specified. 
             // When the input layer is explicitly specified, 

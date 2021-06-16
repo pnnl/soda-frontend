@@ -68,6 +68,8 @@ class MLIRGen
                                Layer& cur_layer);
     void genGlobalAveragePooling2DLayer(Layer& prev_layer,
                                Layer& cur_layer);
+    void genPrintLayerId(unsigned id);
+    void genPrintLayerName(Layer& cur_layer);
 
     void genEnd();
 
@@ -112,6 +114,11 @@ class MLIRGen
                          unsigned,
                          unsigned,
                          std::string&);
+    std::string genStoreV(std::vector<std::string> &,
+                          std::string &,
+                          unsigned,
+                          std::vector<unsigned>,
+                          std::string&);
 
     std::string genAdd(std::string&,
                        std::string&,
@@ -154,7 +161,13 @@ class MLIRGen
                           unsigned row_buf, 
                           std::string &row_shape_memref,
                           Layer::Data_Type &dtype, 
-                          unsigned space_scaling); 
+                          unsigned space_scaling);
+    std::string genSum2D(std::string &sum_var, 
+                              unsigned array_size, 
+                              unsigned row_buf, 
+                              std::string &row_shape_memref,
+                              Layer::Data_Type &dtype,  
+                              unsigned space_scaling);  
     std::string genExpNorm(unsigned res_buf,
                            unsigned exp_buf,
                            std::vector<unsigned> &shape,

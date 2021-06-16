@@ -1121,7 +1121,7 @@ void MLIRGen::genBatchNormalizationLayer(Layer& prev_layer,
         //     + " %" + default_index_str[0] + " = 0 to "
         //     + std::to_string(input_shape[0])
         //     + " step 1\n"
-        //     + std::string(4 + (num_loops-1) * 2, ' ') + "{\n";
+        //     " step 1\n"
         // code += loop_open;
 
         //load data to temp variable
@@ -1332,7 +1332,6 @@ void MLIRGen::genBatchNormalizationLayer(Layer& prev_layer,
 void MLIRGen::genAddLayer(Layer& prev_layer,
                             Layer& cur_layer)
 {
-    mlir << " Add Conv_todo.\n\n\n";
     mlir << "    // Layer type: Add Layer.\n"
          << "    // Layer name: " << cur_layer.getName() << "\n";
 
@@ -1342,9 +1341,9 @@ void MLIRGen::genAddLayer(Layer& prev_layer,
     auto prev_layer_id_0 = in_layers[0]->getID();
     auto prev_layer_id_1 = in_layers[1]->getID();
     mlir << "    // Input from layer: " << in_layers[0]->getName() << "\n";
-        auto input_buffer_reg_0 = variable_map.at(in_layers[0]->getName());
-            mlir << "    // Input buffer: %"
-             << input_buffer_reg_0 << " : ";
+    auto input_buffer_reg_0 = variable_map.at(in_layers[0]->getName());
+    mlir << "    // Input buffer: %"
+         << input_buffer_reg_0 << " : ";
     auto& input_shape = in_layers[0]->getOutputDim();
     auto& input_shape_1 = in_layers[1]->getOutputDim();
     assert(input_shape_1 == input_shape);
@@ -1455,7 +1454,209 @@ void MLIRGen::genAddLayer(Layer& prev_layer,
 void MLIRGen::genGlobalAveragePooling2DLayer(Layer& prev_layer,
                             Layer& cur_layer)
 {
-    mlir << " GlobalAveragePooling2D _todo.\n";
+    // mlir << " GlobalAveragePooling2D _todo.\n";
+    mlir << "    // Layer type: GlobalAveragePooling2D Layer.\n"
+         << "    // Layer name: " << cur_layer.getName() << "\n";
+    
+    auto cur_layer_id = cur_layer.getID();
+    auto in_layers = cur_layer.getInLayers();
+    // Single input: 
+    auto prev_layer_id_0 = in_layers[0]->getID();
+    mlir << "    // Input from layer: " << in_layers[0]->getName() << "\n";
+    auto input_buffer_reg_0 = variable_map.at(in_layers[0]->getName());
+    mlir << "    // Input buffer: %"
+         << input_buffer_reg_0 << " : ";
+    auto& input_shape = in_layers[0]->getOutputDim();
+    auto& input_dtype = in_layers[0]->getDataType();
+    auto input_memref = genMemRef(input_shape, input_dtype);
+    mlir << input_memref << "\n";
+    
+    int num_loops = input_shape.size();
+    // Output Shape, Dim 
+    auto& output_dtype = cur_layer.getDataType();
+    std::vector<unsigned> output_shape; 
+    output_shape.push_back(input_shape[0]);
+    output_shape.push_back(input_shape[3]);
+    auto &cur_layer_dtype = cur_layer.getDataType();
+    mlir << "    // Output size: ";
+    for (auto dim : output_shape) { mlir << dim << " "; }
+    mlir << "\n";
+    cur_layer.setOutputDim(output_shape);
+
+    // alloc output 
+    const auto [it_var1, flag1] = variable_map.insert({cur_layer.getName(),global_register_tracker++});
+    if(!flag1) {
+        std::cout << "Variable map insertion failure" << std::endl;
+    }
+    auto output_reg = variable_map.at(cur_layer.getName());
+    auto output_memref = genMemRef(output_shape, cur_layer_dtype);
+    std::string code = "    %" + std::to_string(output_reg) 
+                       + " = "
+                       + dict[ALLOC]
+                       + "() : "
+                       + output_memref;
+    mlir << code << "\n";
+
+
+    // Assuming NHWC format, channel comes last. 
+    // Open Loop nest %a 
+    std::string loop_open = 
+          std::string(4 + (num_loops-4) * 2, ' ')  
+          + dict [FOR]
+          + " %" + default_index_str[0] + " = 0 to "
+          + std::to_string(input_shape[0])
+          + " step 1\n"
+          + std::string(4 + (num_loops-1) * 2, ' ') + "{\n"; 
+
+    // Open Loop nest %d 
+    loop_open += 
+          std::string(4 + (num_loops-3) * 2, ' ')  
+          + dict [FOR]
+          + " %" + default_index_str[3] + " = 0 to "
+          + std::to_string(input_shape[0])
+          + " step 1\n"
+          + std::string(4 + (num_loops-1) * 2, ' ') + "{\n"; 
+    code = loop_open;
+    mlir << code << "\n"; 
+
+    // Alloc temporary variable to 2d vector ; global average pooling
+    // auto buf2d_t0_name = cur_layer.getName() + "_buf2d_t0";
+    // const auto [it_var2, flag2] = variable_map.insert({buf2d_t0_name,global_register_tracker++});
+    // if(!flag2) {
+    //     std::cout << "Variable map insertion failure" << std::endl;
+    // }
+    // auto buf2d_t0_reg = variable_map.at(buf2d_t0_name);
+    // std::vector<unsigned> buf2d_t0_shape; 
+    // buf2d_t0_shape.push_back(input_shape[1]);
+    // buf2d_t0_shape.push_back(input_shape[2]);
+    // auto buf2d_t0_memref = genMemRef(buf2d_t0_shape, cur_layer_dtype); // single element
+
+    // auto output_reg = variable_map.at(cur_layer.getName());
+    // auto output_memref = genMemRef(output_shape, cur_layer_dtype);
+    // code = std::string(4 + (num_loops-4) * 2, ' ')
+    //        + "    %" + std::to_string(buf2d_t0_reg) 
+    //        + " = "
+    //        + dict[ALLOC]
+    //        + "() : "
+    //        + buf2d_t0_memref;
+    // mlir << code << "\n";
+
+    // Temp Reduce Var 
+    std::string temp_r_var = "%r2d_t0";
+    code = std::string(4 + (num_loops-4) * 2, ' ')
+        //    + "    %" + std::to_string(buf2d_t0_reg) 
+           + "    " + temp_r_var
+           + " = "
+           + dict[ALLOC]
+           + "() : "
+           + genDataType(cur_layer_dtype)
+           + "\n";
+
+    // HxW dimension/size 
+    std::string h_w = "\%h_w_dim";
+    code += std::string(4 + (num_loops-4) * 2, ' ')
+        //    + "    %" + std::to_string(buf2d_t0_reg) 
+           + "    " + h_w
+           + " = constant "
+           + std::to_string(input_shape[1] * input_shape[2])
+           + " : "
+           + genDataType(cur_layer_dtype)
+           + "\n";
+
+    // Sum temp variable alloc 
+    std::string temp_sum_var = "%sum2d_t0";
+    code += std::string(4 + (num_loops-4) * 2, ' ')
+        //    + "    %" + std::to_string(buf2d_t0_reg) 
+           + "    " + temp_sum_var
+           + " = "
+           + dict[ALLOC]
+           + "() : "
+        //    + buf2d_t0_memref;
+           + genDataType(cur_layer_dtype)
+           + "\n";
+    mlir << code << "\n";
+
+    // Open Loop nest %b 
+    loop_open = 
+          std::string(4 + (num_loops-4) * 2, ' ')  
+          + dict [FOR]
+          + " %" + default_index_str[1] + " = 0 to "
+          + std::to_string(input_shape[0])
+          + " step 1\n"
+          + std::string(4 + (num_loops-1) * 2, ' ') + "{\n"; 
+
+    // Open Loop nest %c 
+    loop_open += 
+          std::string(4 + (num_loops-3) * 2, ' ')  
+          + dict [FOR]
+          + " %" + default_index_str[2] + " = 0 to "
+          + std::to_string(input_shape[0])
+          + " step 1\n"
+          + std::string(4 + (num_loops-1) * 2, ' ') + "{\n"; 
+    code = loop_open;
+    mlir << code << "\n"; 
+
+    // Load data to tmp var
+    std::string tmpLoad = "%ltmp";
+    code = std::string(4 + (num_loops)*2, ' ')
+                // + "%" + std::to_string(ga_t0_reg) 
+                + tmpLoad
+                + " = " 
+                + genLoad(default_index_str,
+                          input_buffer_reg_0,
+                          0,
+                          input_shape.size(),
+                          input_memref) + "\n";
+    
+    code += std::string(4 + (num_loops)*2, ' ')
+            + temp_sum_var
+            + " = "
+            + dict[ADDF]
+            + " "
+            + temp_sum_var 
+            + ", "
+            + tmpLoad 
+            + " : "
+            + genDataType(cur_layer_dtype)
+            + "\n";
+    mlir << code << "\n";
+    
+    // Close loop %c and %d
+    code = std::string(4 + (num_loops - 1)*2, ' ') + "}\n";
+    code += std::string(4 + (num_loops - 2)*2, ' ') + "}\n";
+    mlir << code << "\n";
+
+    code = std::string(4 + (num_loops)*2, ' ')
+            + temp_r_var
+            + " = "
+            + dict[DIVF]
+            + " "
+            + temp_sum_var 
+            + ", "
+            + h_w 
+            + " : "
+            + genDataType(cur_layer_dtype)
+            + "\n";
+
+    // Store data to buffer
+    std::vector<unsigned> dflt_idx_vector_seq; 
+    dflt_idx_vector_seq.push_back(0);
+    dflt_idx_vector_seq.push_back(3);
+
+    code += std::string(4 + (num_loops)*2, ' ')
+            + genStoreV(default_index_str,
+                        temp_r_var,
+                        output_reg,
+                        dflt_idx_vector_seq, 
+                        output_memref)
+            + "\n";
+    mlir << code << "\n";
+
+    // Close loop %a and %d
+    code = std::string(4 + (num_loops - 3)*2, ' ') + "}\n";
+    code += std::string(4 + (num_loops - 4)*2, ' ') + "}\n";
+    mlir << code << "\n";
+
 }
 
 void MLIRGen::genSoftMaxLayer(Layer& prev_layer,
@@ -2002,6 +2203,28 @@ std::string MLIRGen::genStore(std::vector<std::string> &index_str,
     return ret;
 }
 
+// TODO, this function is not generic enough
+std::string MLIRGen::genStoreV(std::vector<std::string> &index_str,
+                              std::string &val,
+                              unsigned buffer_id,
+                              std::vector<unsigned> idx_vec_seq,
+                              std::string& mem_ref)
+{
+    std::string ret = dict[STORE] + " " + val + ", "
+                    + "%" + std::to_string(buffer_id) + "[";
+    for (auto itr = idx_vec_seq.begin(); itr != idx_vec_seq.end(); itr++)
+    {
+        ret += ("%" + default_index_str[*itr]);
+        if (itr < idx_vec_seq.end() - 1)
+            ret += (", ");
+        // else
+        //     ret += ("] ");
+    }
+    // ret += ("%" + index_str[index_end] + "] : " + mem_ref);
+    ret += ("] : " + mem_ref);
+    return ret;
+}
+
 std::string MLIRGen::genAdd(std::string& out_reg,
                             std::string& opr_1,
                             std::string& opr_2,
@@ -2372,6 +2595,87 @@ std::string MLIRGen::genSum1D(std::string &sum_var,
     return res; 
 }
 
+// std::string MLIRGen::genSum2D(std::string &sum_var, 
+//                               std::vector<unsigned> buf_shape, 
+//                               unsigned buf2d, 
+//                               std::string &buf2d_shape_memref,
+//                               Layer::Data_Type &dtype,  
+//                               unsigned space_scaling) 
+// {
+//     // genSum1D -- Just sum result for 1D array
+//     // std::string sum_var = "%sum";
+//     std::string sum_init = "%sum_init";
+//     std::string sum_itr = "%sum_itr";
+//     std::string sum_new = "%sum_new";
+//     std::string stmp    = "%stmp";
+//     std::string res = std::string(4 + space_scaling * 2, ' ')
+//                        + sum_var
+//                        + " = "
+//                        + dict[FOR]
+//                        // TODO: Fix hard coded values
+//                        + " %" + default_index_str[0] + " = 0 to "
+//                        + std::to_string(buf_shape[0])
+//                        + " step 1 {\n"
+//                        ;
+
+//     space_scaling += 1;
+//     res = std::string(4 + space_scaling * 2, ' ')
+//                        + sum_var
+//                        + " = "
+//                        + dict[FOR]
+//                        // TODO: Fix hard coded values
+//                        + " %" + default_index_str[1] + " = 0 to "
+//                        + std::to_string(buf_shape[1])
+//                        + " step 1 {\n"
+//                        ;
+
+//     // res += std::string(4 + space_scaling * 2, ' ')
+//     //        + "iter_args("
+//     //        + sum_itr
+//     //        + " = "
+//     //        + sum_init
+//     //        + ") -> "
+//     //        + genDataType(dtype)
+//     //        + " {\n"
+//     //        ;
+//     space_scaling += 1;
+//     // load value for addition
+//     res += std::string(4 + space_scaling * 2, ' ')
+//             + stmp
+//             + " = "
+//             + genLoad(default_index_str,
+//                       buf2d,
+//                       0,
+//                       buf_shape[1],
+//                       buf2d_shape_memref)
+//             + " \n"
+//             ;
+//     // addition
+//     res += std::string(4 + space_scaling * 2, ' ')
+//             + sum_new
+//             + " = "
+//             + dict[ADDF] + " "
+//             + sum_itr + ", "
+//             + stmp
+//             + " : "
+//             + genDataType(dtype)
+//             + "\n"
+//             ;
+//     res += std::string(4 + space_scaling * 2, ' ')
+//             + dict[YIELD] + " "
+//             + sum_new
+//             + " : "
+//             + genDataType(dtype)
+//             + "\n"
+//             ;
+
+//     // close sum scope
+//     space_scaling -= 1;
+//     res += std::string(4 + space_scaling * 2, ' ') + "}\n";
+
+//     return res; 
+// }
+
 std::string MLIRGen::genExpNorm(unsigned res_buf,
                                unsigned exp_buf,
                                std::vector<unsigned> &shape,
@@ -2464,6 +2768,18 @@ std::string MLIRGen::genDataType(Layer::Data_Type &d_type)
         exit (EXIT_FAILURE);
     }
   return ret;
+}
+
+void MLIRGen::genPrintLayerId(unsigned id) 
+{
+    mlir << "    //Layer Id: " << id << "\n"; 
+
+}
+
+void MLIRGen::genPrintLayerName(Layer& cur_layer) 
+{
+    mlir << "    //Layer Name: " <<  cur_layer.getName() << "\n"; 
+
 }
 
 }
