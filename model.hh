@@ -7,6 +7,7 @@
 #include <string>
 #include <unordered_map>
 #include <vector>
+#include <utility>
 
 #include "hdf5.h"
 
@@ -26,6 +27,8 @@ class Model
 	// https://machinelearningmastery.com/introduction-to-1x1-convolutions-to-reduce-the-complexity-of-convolutional-neural-networks/
 
         // Batch-normalization: https://stackoverflow.com/questions/38553927/batch-normalization-in-convolutional-neural-network
+        
+        // TODO: Make layer type constant value. 
         enum class Layer_Type : int
         {
             Input, // the input layer
@@ -40,8 +43,9 @@ class Model
             ZeroPadding2D, // Pad zero values to the tensor HxW
             Add,  // Add convolution layers
             GlobalAveragePooling2D,
-            MAX
-        }layer_type = Layer_Type::MAX;
+            MAX,
+            DEFAULT
+        }layer_type = Layer_Type::DEFAULT;
         auto getLayerType() { return layer_type; }
 
         enum class Data_Type : int
@@ -188,6 +192,40 @@ class Model
         auto &getGamma() { return gamma; }
         auto &getGammaDim() {return gamma_dims;}
         auto getEpsilon() { return epsilon; }
+    };
+
+    struct LayerMetaInfo 
+    {
+        LayerMetaInfo() {}
+        LayerMetaInfo(unsigned lid, std::string lname, Model::Layer::Layer_Type ltype): layerId(lid), layer_name(lname), layer_type(ltype) {}
+        unsigned layerId;
+        std::string layer_name; 
+        Model::Layer::Layer_Type layer_type = Model::Layer::Layer_Type::DEFAULT;
+    };
+
+    // Model - Architecture - Layer Generation
+    class TestLayer 
+    {
+      public:
+        TestLayer() {}
+        TestLayer(std::vector<Model::Layer>& layers_) {layers = layers_;}
+
+        
+        // void getInputDim (Model::Layer& layer) {}
+        // void getOutputDim (Model::Layer& layer) {}
+
+        void initializeLayers(std::vector<Model::Layer>& layers_) {layers = layers_;} 
+        std::size_t numLayers() { return layers.size();}
+        
+        // Bin each layer to the respective Layer_type using the map operator.
+        void binLayers();
+      private: 
+        std::vector<Model::Layer> layers;
+        std::unordered_map<Layer::Layer_Type, std::vector<LayerMetaInfo>> layer_meta_info;
+        // std::vector<LayerTypeInfo> layer_type_info;
+        std::vector<unsigned> input_dim;
+        std::vector<unsigned> output_dim;
+        // TODO: Keep a list of different layer types in different buckets
     };
 
     // Model - Architecture
@@ -390,6 +428,8 @@ class Model
             }
         }
     };
+
+    
 
     Architecture arch;
 

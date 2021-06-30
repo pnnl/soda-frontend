@@ -45,7 +45,7 @@ void Model::Architecture::MLIRGenerator()
     Linalg::MLIRGen mlir_gen(mlir_gen_fn);
     mlir_gen.genInit(layers);
     // for (auto i = 0; i < layers.size(); i++)
-    for (auto i = 0; i < 176; i++)
+    for (auto i = 0; i < 177; i++)
     {
         layers[i].setID(i);
         // mlir_gen.genPrintLayerId(i);
@@ -105,8 +105,9 @@ void Model::Architecture::MLIRGenerator()
     }
     mlir_gen.genEnd();
 
-   
-
+    Model::TestLayer testLayers(layers);
+    std::cout << " -- Total Layers count: " << testLayers.numLayers() << std::endl;
+    testLayers.binLayers();
     /* */
 }
 
@@ -534,4 +535,33 @@ void Model::extrWeights(hid_t id)
     }
     free(rdata);
 }
+
+// TestLayer
+void Model::TestLayer::binLayers() 
+{
+    typedef Model::Layer::Layer_Type layer_enum_type; 
+    typedef std::vector<Model::LayerMetaInfo> meta_lyr_vec_type; 
+    assert(layers.size() != 0);
+    // const auto& c_layers = layers; // Layers need to be constant as well. 
+    for (auto&& cl : layers )
+    {
+        std::unordered_map<layer_enum_type, meta_lyr_vec_type>::iterator 
+            map_itr = layer_meta_info.find(cl.getLayerType());
+        
+        layer_enum_type lt = cl.getLayerType(); 
+        Model::LayerMetaInfo lyr_meta_info(cl.getID(), cl.getName(), lt);
+        if(map_itr == layer_meta_info.end())
+        {
+            meta_lyr_vec_type meta_layer_vec {lyr_meta_info};
+            layer_meta_info.insert({{lt, meta_layer_vec}});
+        }
+        else 
+        {
+            map_itr->second.emplace_back(lyr_meta_info);
+        }
+    }
+
+    std::cout << " Layer Meta Info - Map size: " << layer_meta_info.size() << std::endl;
 }
+
+} // SODA_FRONTEND
