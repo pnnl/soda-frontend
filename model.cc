@@ -1,3 +1,5 @@
+// Copyright 2021 Battelle Memorial Institute
+
 #include "model.hh"
 
 // boost library to parse json architecture file

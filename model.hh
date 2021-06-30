@@ -1,3 +1,5 @@
+// Copyright 2021 Battelle Memorial Institute
+
 #ifndef __MODEL_HH__
 #define __MODEL_HH__
 

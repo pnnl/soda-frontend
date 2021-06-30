@@ -1,3 +1,5 @@
+// Copyright 2021 Battelle Memorial Institute
+
 #include "mlir_linalg_gen.hh"
 
 #include <cassert>

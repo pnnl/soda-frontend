@@ -1,3 +1,5 @@
+// Copyright 2021 Battelle Memorial Institute
+
 #ifndef __MLIR_LINALG_DICT_HH__
 #define __MLIR_LINALG_DICT_HH__
 

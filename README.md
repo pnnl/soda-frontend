@@ -1,3 +1,5 @@
+<!-- Copyright 2021 Battelle Memorial Institute -->
+
 SODA Front-end prototype
 
 Dependencies: hdf5(serial), boost library

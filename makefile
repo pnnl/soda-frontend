@@ -1,3 +1,5 @@
+# Copyright 2021 Battelle Memorial Institute
+
 HDF5Lib := /usr/include/hdf5/serial/
 CC      := g++ -g
 SOURCE	:= main.cc \

@@ -1,3 +1,5 @@
+// Copyright 2021 Battelle Memorial Institute
+
 #include "util/args.hh"
 #include "model.hh"
 
