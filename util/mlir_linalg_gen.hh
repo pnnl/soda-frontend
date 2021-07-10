@@ -37,6 +37,7 @@ class MLIRGen
     std::vector<std::string> default_index_str;
 
   public:
+    MLIRGen() {};
     MLIRGen(std::string &_fn)
     {
         default_index_str =
@@ -48,7 +49,11 @@ class MLIRGen
     }
 
     void genInit(std::vector<Layer> &layers);
-
+    void genInitLayerTest(Layer& layer);
+    // TODO: 
+    void genInitLayersTest(std::vector<Layer> &layers);
+    void genKernelLoad(Layer& layer);
+    void genLayerBody(std::vector<Layer>& layers, unsigned layer_id);
     void genInputLayer(Layer& layer);
     void genConv2DLayer(Layer& prev_layer,
                         Layer& cur_layer);
@@ -74,6 +79,12 @@ class MLIRGen
     void genPrintLayerName(Layer& cur_layer);
 
     void genEnd();
+
+    auto getVariableMap() {return variable_map;}
+    void setVariableMap(std::map<std::string,int> variable_map_) 
+    {
+      variable_map = variable_map_;
+    }
 
   protected:
 

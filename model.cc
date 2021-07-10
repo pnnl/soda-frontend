@@ -9,6 +9,7 @@
 #include <cassert>
 
 #include "util/mlir_linalg_gen.hh"
+// #include "test/testLayers.hh"
 
 namespace SODA_FrontEnd
 {
@@ -19,7 +20,7 @@ void Model::Architecture::MLIRGenerator()
         Layer &cur_layer = layers[i];
         cur_layer.setID(i);
 
-        std::cerr << "Cur. layer name: " << cur_layer.getName() << ", ID: " << i <<"\n";
+        // std::cerr << "Cur. layer name: " << cur_layer.getName() << ", ID: " << i <<"\n";
 
         // Output input layers to the current layer
         if (auto map_iter = layer_inputs.find(cur_layer.getName());
@@ -30,8 +31,8 @@ void Model::Architecture::MLIRGenerator()
             for (auto in_layer_name : in_layer_names)
             {
                 Layer &in_layer = getLayer(in_layer_name);
-                std::cerr << "    Input layer: "
-                          << in_layer.getName() << "\n";
+                // std::cerr << "    Input layer: "
+                //           << in_layer.getName() << "\n";
                 
                 // Store pointers to inbound layers in each layer
                 if(cur_layer.getName() != "InputLayer") {
@@ -50,55 +51,7 @@ void Model::Architecture::MLIRGenerator()
     for (auto i = 0; i < 177; i++)
     {
         layers[i].setID(i);
-        // mlir_gen.genPrintLayerId(i);
-        if (layers[i].layer_type == Layer::Layer_Type::Input)
-        {
-            mlir_gen.genInputLayer(layers[i]);
-        }
-        else if (layers[i].layer_type == Layer::Layer_Type::Conv2D)
-        {
-            mlir_gen.genConv2DLayer(layers[i-1], layers[i]); 
-        }
-        else if (layers[i].layer_type == Layer::Layer_Type::Activation)
-        {
-            if(layers[i].activation == Layer::Activation::relu)
-                mlir_gen.genActLayer(layers[i-1], layers[i]);
-            else if(layers[i].activation == Layer::Activation::softmax)
-                mlir_gen.genSoftMaxLayer(layers[i-1], layers[i]);
-        }
-        else if (layers[i].layer_type == Layer::Layer_Type::MaxPooling2D)
-        {
-            mlir_gen.genMaxPooling2DLayer(layers[i-1], layers[i]);
-        }
-        else if (layers[i].layer_type == Layer::Layer_Type::Flatten)
-        {
-            mlir_gen.genFlattenLayer(layers[i-1], layers[i]);
-        }
-        else if (layers[i].layer_type == Layer::Layer_Type::Dense)
-        {
-            mlir_gen.genDenseLayer(layers[i-1], layers[i]);
-        }
-        else if (layers[i].layer_type == Layer::Layer_Type::BatchNormalization)
-        {
-            // For Convolution
-            mlir_gen.genBatchNormalizationLayer(layers[i-1], layers[i]);
-        }
-        else if (layers[i].layer_type == Layer::Layer_Type::ZeroPadding2D)
-        {
-            // For Convolution
-            mlir_gen.genZeroPadding2DLayer(layers[i-1], layers[i]);
-        }
-        else if (layers[i].layer_type == Layer::Layer_Type::Add)
-        {
-            // For Convolution Add
-            mlir_gen.genAddLayer(layers[i-1], layers[i]);
-        }
-        else if (layers[i].layer_type == Layer::Layer_Type::GlobalAveragePooling2D)
-        {
-            // For Convolution Add, overlap with MaxPooling/AveragePooling?? 
-            mlir_gen.genGlobalAveragePooling2DLayer(layers[i-1], layers[i]);
-        }
-        
+        mlir_gen.genLayerBody(layers, i);
     }
     // Print Layer Names: 
     for (auto i = 0; i < layers.size(); i++) {
@@ -107,9 +60,25 @@ void Model::Architecture::MLIRGenerator()
     }
     mlir_gen.genEnd();
 
+    // SODA_FrontEnd::TestLayer testLayers(layers);
     Model::TestLayer testLayers(layers);
     std::cout << " -- Total Layers count: " << testLayers.numLayers() << std::endl;
     testLayers.binLayers();
+
+    unsigned layer_id = 1;
+    std::cout << mlir_test_gen_folder << std::endl;
+    std::string test_file = mlir_test_gen_folder + "/" + layers[3].getName() + ".mlir";
+    std::cout << test_file << std::endl;
+    // testLayers.genTestLayer(testLayers.getLayer(), mlir_gen_fn);
+    // testLayers.genTestLayer(layers, layer_id, mlir_gen_fn);
+
+    for(int i=2; i < 3; i++) 
+    {
+        // Model::Layer cur_layer = testLayers.getLayer(i);
+        std::string layer_test_file_name = mlir_test_gen_folder + "/" + layers[i].getName() + ".mlir";
+        testLayers.genTestLayer(layers, i, layer_test_file_name, mlir_gen.getVariableMap());
+        
+    }
     /* */
 }
 
@@ -564,6 +533,20 @@ void Model::TestLayer::binLayers()
     }
 
     std::cout << " Layer Meta Info - Map size: " << layer_meta_info.size() << std::endl;
+}
+
+// Generate Single TestLayer
+void Model::TestLayer::genTestLayer(std::vector<Model::Layer>& layers, unsigned layer_id, std::string mlir_layer_test_filename, std::map<std::string,int> variable_map) 
+{
+    // Test the first layer only 
+    Linalg::MLIRGen mlir_gen_test(mlir_layer_test_filename);
+    mlir_gen_test.setVariableMap(variable_map);
+    if(!(layers[layer_id].getLayerType() == Layer::Layer_Type::Input))
+    {
+        mlir_gen_test.genInitLayerTest(layers[layer_id]);
+        mlir_gen_test.genLayerBody(layers, layer_id);
+        mlir_gen_test.genEnd();
+    }
 }
 
 } // SODA_FRONTEND

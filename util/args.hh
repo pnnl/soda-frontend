@@ -15,11 +15,13 @@ class Args
     std::string arch_json_fn;
     std::string weight_h5_fn;
     std::string gen_mlir_out;
+    std::string mlir_test_gen_folder;
     bool print_layers; 
 
     auto &getArchJson() { return arch_json_fn; }
     auto &getWeightH5() { return weight_h5_fn; }
     auto &getGenMLIROutFn() { return gen_mlir_out; }
+    auto &getMLIRTestGenFolderName() { return mlir_test_gen_folder; }
 
     Args(int argc, const char *argv[]): print_layers(0)
     {
@@ -38,6 +40,8 @@ class Args
                 "Weight file in h5 format")
             ("mlir-gen", po::value<std::string>(&gen_mlir_out)->required(),
                 "Generated MLIR output file")
+            ("mlir-test-gen-folder", po::value<std::string>(&mlir_test_gen_folder),
+                "Folder for MLIR test output files")
             ("print-layers", "Print layers and dimensions.");
         po::variables_map vm;
         try 

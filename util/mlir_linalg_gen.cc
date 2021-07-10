@@ -9,47 +9,114 @@ namespace SODA_FrontEnd
 {
 namespace Linalg
 {
+
+void MLIRGen::genLayerBody(std::vector<Layer>& layers, unsigned layer_id) 
+{
+    if (layers[layer_id].layer_type == Layer::Layer_Type::Input)
+        {
+            genInputLayer(layers[layer_id]);
+        }
+        else if (layers[layer_id].layer_type == Layer::Layer_Type::Conv2D)
+        {
+            genConv2DLayer(layers[layer_id - 1], layers[layer_id]); 
+        }
+        else if (layers[layer_id].layer_type == Layer::Layer_Type::Activation)
+        {
+            if(layers[layer_id].activation == Layer::Activation::relu)
+                genActLayer(layers[layer_id - 1], layers[layer_id]);
+            else if(layers[layer_id].activation == Layer::Activation::softmax)
+                genSoftMaxLayer(layers[layer_id - 1], layers[layer_id]);
+        }
+        else if (layers[layer_id].layer_type == Layer::Layer_Type::MaxPooling2D)
+        {
+            genMaxPooling2DLayer(layers[layer_id - 1], layers[layer_id]);
+        }
+        else if (layers[layer_id].layer_type == Layer::Layer_Type::Flatten)
+        {
+            genFlattenLayer(layers[layer_id - 1], layers[layer_id]);
+        }
+        else if (layers[layer_id].layer_type == Layer::Layer_Type::Dense)
+        {
+            genDenseLayer(layers[layer_id - 1], layers[layer_id]);
+        }
+        else if (layers[layer_id].layer_type == Layer::Layer_Type::BatchNormalization)
+        {
+            // For Convolution
+            genBatchNormalizationLayer(layers[layer_id - 1], layers[layer_id]);
+        }
+        else if (layers[layer_id].layer_type == Layer::Layer_Type::ZeroPadding2D)
+        {
+            // For Convolution
+            genZeroPadding2DLayer(layers[layer_id - 1], layers[layer_id]);
+        }
+        else if (layers[layer_id].layer_type == Layer::Layer_Type::Add)
+        {
+            // For Convolution Add
+            genAddLayer(layers[layer_id - 1], layers[layer_id]);
+        }
+        else if (layers[layer_id].layer_type == Layer::Layer_Type::GlobalAveragePooling2D)
+        {
+            // For Convolution Add, overlap with MaxPooling/AveragePooling?? 
+            genGlobalAveragePooling2DLayer(layers[layer_id - 1], layers[layer_id]);
+        }
+
+}
+void MLIRGen::genKernelLoad(Layer& layer) 
+{
+    if (layer.getLayerType() == Layer::Layer_Type::Conv2D)
+    {
+        auto kernel_dim = layer.getKernelDim();
+        auto cur_layer_dtype = layer.getDataType();
+        auto kernel_memref = genMemRef(kernel_dim,
+                                       cur_layer_dtype);
+        auto tensor_const = genTensorConstF4D(layer.getKernel(),
+                                              kernel_dim,
+                                              cur_layer_dtype);
+
+        auto var_name = "@" + layer.getName() + "_kernel";
+
+        mlir << "memref.global \"private\" constant "
+             << var_name << " : " << kernel_memref
+             << " = dense<" << tensor_const << ">\n\n";
+    }
+    else if (layer.getLayerType() == Layer::Layer_Type::BatchNormalization) 
+    {
+        auto cur_layer_dtype = layer.getDataType();
+        auto gamma_dim = layer.getGammaDim();
+        auto gamma_memref = genMemRef(gamma_dim,
+                                       cur_layer_dtype);
+        auto tensor_const = genTensorConstF1D(layer.getGamma(),
+                                              gamma_dim,
+                                              cur_layer_dtype);
+        
+        auto var_name = "@" + layer.getName() + "_gamma";
+
+        mlir << "memref.global \"private\" constant "
+             << var_name << " : " << gamma_memref
+             << " = dense<" << tensor_const << ">\n\n";                                      
+    }
+
+}
+
 // TODO-Shihao
 // We temporarily put all the weights/bias as global private constants
+void MLIRGen::genInitLayerTest(Layer& layer)
+{
+    mlir << "// AutoGen - Do not modify\n\n";
+    genKernelLoad(layer);
+    mlir << "func @main() -> ()\n"
+         << "{\n"
+         << "    // Global register id starts at: "
+         << global_register_tracker << "\n";
+}
+
 void MLIRGen::genInit(std::vector<Layer> &layers)
 {
     mlir << "// AutoGen - Do not modify\n\n";
 
     for (auto i = 0; i < layers.size(); i++)
     {
-        // TODO, add more layer type
-        if (layers[i].getLayerType() == Layer::Layer_Type::Conv2D)
-        {
-            auto kernel_dim = layers[i].getKernelDim();
-            auto cur_layer_dtype = layers[i].getDataType();
-            auto kernel_memref = genMemRef(kernel_dim,
-                                           cur_layer_dtype);
-            auto tensor_const = genTensorConstF4D(layers[i].getKernel(),
-                                                  kernel_dim,
-                                                  cur_layer_dtype);
-
-            auto var_name = "@" + layers[i].getName() + "_kernel";
-
-            mlir << "memref.global \"private\" constant "
-                 << var_name << " : " << kernel_memref
-                 << " = dense<" << tensor_const << ">\n\n";
-        }
-        else if (layers[i].getLayerType() == Layer::Layer_Type::BatchNormalization) 
-        {
-            auto cur_layer_dtype = layers[i].getDataType();
-            auto gamma_dim = layers[i].getGammaDim();
-            auto gamma_memref = genMemRef(gamma_dim,
-                                           cur_layer_dtype);
-            auto tensor_const = genTensorConstF1D(layers[i].getGamma(),
-                                                  gamma_dim,
-                                                  cur_layer_dtype);
-            
-            auto var_name = "@" + layers[i].getName() + "_gamma";
-
-            mlir << "memref.global \"private\" constant "
-                 << var_name << " : " << gamma_memref
-                 << " = dense<" << tensor_const << ">\n\n";                                      
-        }
+        genKernelLoad(layers[i]);
     }
 
     mlir << "func @main() -> ()\n"

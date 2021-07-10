@@ -10,8 +10,10 @@
 #include <unordered_map>
 #include <vector>
 #include <utility>
+#include <map>
 
 #include "hdf5.h"
+// #include "util/mlir_linalg_gen.hh"
 
 namespace SODA_FrontEnd
 {
@@ -196,40 +198,6 @@ class Model
         auto getEpsilon() { return epsilon; }
     };
 
-    struct LayerMetaInfo 
-    {
-        LayerMetaInfo() {}
-        LayerMetaInfo(unsigned lid, std::string lname, Model::Layer::Layer_Type ltype): layerId(lid), layer_name(lname), layer_type(ltype) {}
-        unsigned layerId;
-        std::string layer_name; 
-        Model::Layer::Layer_Type layer_type = Model::Layer::Layer_Type::DEFAULT;
-    };
-
-    // Model - Architecture - Layer Generation
-    class TestLayer 
-    {
-      public:
-        TestLayer() {}
-        TestLayer(std::vector<Model::Layer>& layers_) {layers = layers_;}
-
-        
-        // void getInputDim (Model::Layer& layer) {}
-        // void getOutputDim (Model::Layer& layer) {}
-
-        void initializeLayers(std::vector<Model::Layer>& layers_) {layers = layers_;} 
-        std::size_t numLayers() { return layers.size();}
-        
-        // Bin each layer to the respective Layer_type using the map operator.
-        void binLayers();
-      private: 
-        std::vector<Model::Layer> layers;
-        std::unordered_map<Layer::Layer_Type, std::vector<LayerMetaInfo>> layer_meta_info;
-        // std::vector<LayerTypeInfo> layer_type_info;
-        std::vector<unsigned> input_dim;
-        std::vector<unsigned> output_dim;
-        // TODO: Keep a list of different layer types in different buckets
-    };
-
     // Model - Architecture
     class Architecture
     {
@@ -240,6 +208,7 @@ class Model
             layer_inputs;
 
         std::string mlir_gen_fn;
+        std::string mlir_test_gen_folder;
       public:
         Architecture() {}
 
@@ -247,6 +216,11 @@ class Model
         {
             // TODO, set it to code-gen class
             mlir_gen_fn = _fn;
+        }
+
+        void setMLIRTestGeneratorFolder(std::string _fn)
+        {
+            mlir_test_gen_folder = _fn;
         }
 
         void addLayer(std::string &_name, Layer::Layer_Type &_type)
@@ -431,11 +405,54 @@ class Model
         }
     };
 
-    
+    struct LayerMetaInfo 
+    {
+        LayerMetaInfo() {}
+        LayerMetaInfo(unsigned lid, std::string lname, Model::Layer::Layer_Type ltype): layerId(lid), layer_name(lname), layer_type(ltype) {}
+        unsigned layerId;
+        std::string layer_name; 
+        Model::Layer::Layer_Type layer_type = Model::Layer::Layer_Type::DEFAULT;
+    };
 
+    // Model - Architecture - Layer Generation
+    class TestLayer //: public Linalg::MLIRGen
+    //: public Model::Layer, public Linalg::MLIRGen
+    {
+      public:
+        TestLayer() {}
+        TestLayer(std::vector<Model::Layer>& layers_) {layers = layers_;}
+
+        // void getInputDim (Model::Layer& layer) {}
+        // void getOutputDim (Model::Layer& layer) {}
+
+        void initializeLayers(std::vector<Model::Layer>& layers_) {layers = layers_;} 
+        std::size_t numLayers() { return layers.size();}
+        
+        // Bin each layer to the respective Layer_type using the map operator.
+        void binLayers();
+        // void genTestLayer(Model::Layer& layer,
+        void genTestLayer(std::vector<Model::Layer>& layers,
+            unsigned layer_id,    
+            std::string mlir_op_filename, // "mlir_output_filename"
+            std::map<std::string,int> variable_map); // "variable tracking from previous network pass"
+        Model::Layer& getLayer(unsigned pos) 
+        {
+            return layers[pos];
+        }
+      private: 
+        std::vector<Model::Layer> layers;
+        std::unordered_map<Layer::Layer_Type, std::vector<LayerMetaInfo> > layer_meta_info;
+        // std::vector<LayerTypeInfo> layer_type_info;
+        std::vector<unsigned> input_dim;
+        std::vector<unsigned> output_dim;
+        // TODO: Keep a list of different layer types in different buckets
+    };
+
+ 
     Architecture arch;
 
   public:
+    Model() {}
     Model(std::string &arch_file, 
           std::string &weight_file,
           std::string &mlir_gen)
@@ -444,6 +461,18 @@ class Model
         loadWeights(weight_file);
 
         arch.setMLIRGeneratorFile(mlir_gen);
+    }
+    
+    Model(std::string &arch_file, 
+          std::string &weight_file,
+          std::string &mlir_gen, 
+          std::string &mlir_test_gen_folder)
+    {
+        loadArch(arch_file);
+        loadWeights(weight_file);
+
+        arch.setMLIRGeneratorFile(mlir_gen);
+        arch.setMLIRTestGeneratorFolder(mlir_test_gen_folder);
     }
 
     void printLayers() { arch.printLayers(); }
