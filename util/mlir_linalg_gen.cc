@@ -13,52 +13,52 @@ namespace Linalg
 void MLIRGen::genLayerBody(std::vector<Layer>& layers, unsigned layer_id) 
 {
     if (layers[layer_id].layer_type == Layer::Layer_Type::Input)
-        {
+    {
             genInputLayer(layers[layer_id]);
-        }
-        else if (layers[layer_id].layer_type == Layer::Layer_Type::Conv2D)
-        {
-            genConv2DLayer(layers[layer_id - 1], layers[layer_id]); 
-        }
-        else if (layers[layer_id].layer_type == Layer::Layer_Type::Activation)
-        {
-            if(layers[layer_id].activation == Layer::Activation::relu)
-                genActLayer(layers[layer_id - 1], layers[layer_id]);
-            else if(layers[layer_id].activation == Layer::Activation::softmax)
-                genSoftMaxLayer(layers[layer_id - 1], layers[layer_id]);
-        }
-        else if (layers[layer_id].layer_type == Layer::Layer_Type::MaxPooling2D)
-        {
-            genMaxPooling2DLayer(layers[layer_id - 1], layers[layer_id]);
-        }
-        else if (layers[layer_id].layer_type == Layer::Layer_Type::Flatten)
-        {
-            genFlattenLayer(layers[layer_id - 1], layers[layer_id]);
-        }
-        else if (layers[layer_id].layer_type == Layer::Layer_Type::Dense)
-        {
-            genDenseLayer(layers[layer_id - 1], layers[layer_id]);
-        }
-        else if (layers[layer_id].layer_type == Layer::Layer_Type::BatchNormalization)
-        {
-            // For Convolution
-            genBatchNormalizationLayer(layers[layer_id - 1], layers[layer_id]);
-        }
-        else if (layers[layer_id].layer_type == Layer::Layer_Type::ZeroPadding2D)
-        {
-            // For Convolution
-            genZeroPadding2DLayer(layers[layer_id - 1], layers[layer_id]);
-        }
-        else if (layers[layer_id].layer_type == Layer::Layer_Type::Add)
-        {
-            // For Convolution Add
-            genAddLayer(layers[layer_id - 1], layers[layer_id]);
-        }
-        else if (layers[layer_id].layer_type == Layer::Layer_Type::GlobalAveragePooling2D)
-        {
-            // For Convolution Add, overlap with MaxPooling/AveragePooling?? 
-            genGlobalAveragePooling2DLayer(layers[layer_id - 1], layers[layer_id]);
-        }
+    }
+    else if (layers[layer_id].layer_type == Layer::Layer_Type::Conv2D)
+    {
+        genConv2DLayer(layers[layer_id - 1], layers[layer_id]); 
+    }
+    else if (layers[layer_id].layer_type == Layer::Layer_Type::Activation)
+    {
+        if(layers[layer_id].activation == Layer::Activation::relu)
+            genActLayer(layers[layer_id - 1], layers[layer_id]);
+        else if(layers[layer_id].activation == Layer::Activation::softmax)
+            genSoftMaxLayer(layers[layer_id - 1], layers[layer_id]);
+    }
+    else if (layers[layer_id].layer_type == Layer::Layer_Type::MaxPooling2D)
+    {
+        genMaxPooling2DLayer(layers[layer_id - 1], layers[layer_id]);
+    }
+    else if (layers[layer_id].layer_type == Layer::Layer_Type::Flatten)
+    {
+        genFlattenLayer(layers[layer_id - 1], layers[layer_id]);
+    }
+    else if (layers[layer_id].layer_type == Layer::Layer_Type::Dense)
+    {
+        genDenseLayer(layers[layer_id - 1], layers[layer_id]);
+    }
+    else if (layers[layer_id].layer_type == Layer::Layer_Type::BatchNormalization)
+    {
+        // For Convolution
+        genBatchNormalizationLayer(layers[layer_id - 1], layers[layer_id]);
+    }
+    else if (layers[layer_id].layer_type == Layer::Layer_Type::ZeroPadding2D)
+    {
+        // For Convolution
+        genZeroPadding2DLayer(layers[layer_id - 1], layers[layer_id]);
+    }
+    else if (layers[layer_id].layer_type == Layer::Layer_Type::Add)
+    {
+        // For Convolution Add
+        genAddLayer(layers[layer_id - 1], layers[layer_id]);
+    }
+    else if (layers[layer_id].layer_type == Layer::Layer_Type::GlobalAveragePooling2D)
+    {
+        // For Convolution Add, overlap with MaxPooling/AveragePooling?? 
+        genGlobalAveragePooling2DLayer(layers[layer_id - 1], layers[layer_id]);
+    }
 
 }
 void MLIRGen::genKernelLoad(Layer& layer) 
@@ -171,6 +171,26 @@ void MLIRGen::genConv2DLayer(Layer& prev_layer,
     auto& input_dtype = prev_layer.getDataType();
     auto input_memref = genMemRef(input_shape, input_dtype);
     mlir << input_memref << "\n";
+    
+    if(this->isTest()) 
+    {
+        std::string code = "    %" + std::to_string(input_buffer_reg) 
+                         + " = "
+                         + dict[ALLOC]
+                         + "() : "
+                         + input_memref
+                         + " \n";
+        code += "    %c1 = constant 1 : f32 \n";                 
+        code += "    " 
+                + dict[FILLVAR]
+                + "(%c1,%"
+                + std::to_string(input_buffer_reg)
+                + ") : f32, "
+                + input_memref 
+                + "\n";
+        mlir << code << "\n";
+
+    }
 
     auto &kernel_dim = cur_layer.getKernelDim();
     mlir << "    // Kernel dim.: ";
@@ -316,6 +336,26 @@ void MLIRGen::genActLayer(Layer& prev_layer,
     auto input_memref = genMemRef(input_shape, input_dtype);
     mlir << input_memref << "\n";
 
+    if(this->isTest()) 
+    {
+        std::string code = "    %" + std::to_string(input_buffer_reg) 
+                         + " = "
+                         + dict[ALLOC]
+                         + "() : "
+                         + input_memref
+                         + " \n";
+        code += "    %c1 = constant 1 : f32 \n";                 
+        code += "    " 
+                + dict[FILLVAR]
+                + "(%c1,%"
+                + std::to_string(input_buffer_reg)
+                + ") : f32, "
+                + input_memref 
+                + "\n";
+        mlir << code << "\n";
+
+    }
+
     // Output shape reminds the same
     mlir << "    // Output buffer: %"
          << input_buffer_reg << " : "
@@ -362,6 +402,26 @@ void MLIRGen::genMaxPooling2DLayer(Layer& prev_layer,
     auto& input_dtype = prev_layer.getDataType();
     auto input_memref = genMemRef(input_shape, input_dtype);
     mlir << input_memref << "\n";
+
+    if(this->isTest()) 
+    {
+        std::string code = "    %" + std::to_string(input_buffer_reg) 
+                         + " = "
+                         + dict[ALLOC]
+                         + "() : "
+                         + input_memref
+                         + " \n";
+        code += "    %c1 = constant 1 : f32 \n";                 
+        code += "    " 
+                + dict[FILLVAR]
+                + "(%c1,%"
+                + std::to_string(input_buffer_reg)
+                + ") : f32, "
+                + input_memref 
+                + "\n";
+        mlir << code << "\n";
+
+    }
 
     auto &kernel = cur_layer.getKernelDim();
     mlir << "    // Kernel dim.: ";
@@ -462,6 +522,26 @@ void MLIRGen::genFlattenLayer(Layer& prev_layer,
     auto& input_dtype = prev_layer.getDataType();
     auto input_memref = genMemRef(input_shape, input_dtype);
     mlir << input_memref << "\n";
+
+    if(this->isTest()) 
+    {
+        std::string code = "    %" + std::to_string(input_buffer_reg) 
+                         + " = "
+                         + dict[ALLOC]
+                         + "() : "
+                         + input_memref
+                         + " \n";
+        code += "    %c1 = constant 1 : f32 \n";                 
+        code += "    " 
+                + dict[FILLVAR]
+                + "(%c1,%"
+                + std::to_string(input_buffer_reg)
+                + ") : f32, "
+                + input_memref 
+                + "\n";
+        mlir << code << "\n";
+
+    }
 
     // Determine output size
     auto &cur_layer_dtype = cur_layer.getDataType();
@@ -592,6 +672,25 @@ void MLIRGen::genDenseLayer(Layer& prev_layer,
     auto input_memref = genMemRef(input_shape, input_dtype);
     mlir << input_memref << "\n";
 
+    if(this->isTest()) 
+    {
+        std::string code = "    %" + std::to_string(input_buffer_reg) 
+                         + " = "
+                         + dict[ALLOC]
+                         + "() : "
+                         + input_memref
+                         + " \n";
+        code += "    %c1 = constant 1 : f32 \n";                 
+        code += "    " 
+                + dict[FILLVAR]
+                + "(%c1,%"
+                + std::to_string(input_buffer_reg)
+                + ") : f32, "
+                + input_memref 
+                + "\n";
+        mlir << code << "\n";
+
+    }
 
     // Determine output and kernel dimension
     auto &kernel_dim = cur_layer.getKernelDim();
@@ -683,6 +782,26 @@ void MLIRGen::genZeroPadding2DLayer(Layer& prev_layer,
         auto& input_dtype = in_layers[0]->getDataType();
         auto input_memref = genMemRef(input_shape, input_dtype);
         mlir << input_memref << "\n";
+        
+        if(this->isTest()) 
+        {
+            std::string code = "    %" + std::to_string(input_buffer_reg) 
+                             + " = "
+                             + dict[ALLOC]
+                             + "() : "
+                             + input_memref
+                             + " \n";
+            code += "    %c1 = constant 1 : f32 \n";                 
+            code += "    " 
+                    + dict[FILLVAR]
+                    + "(%c1,%"
+                    + std::to_string(input_buffer_reg)
+                    + ") : f32, "
+                    + input_memref 
+                    + "\n";
+            mlir << code << "\n";
+
+        }
 
         auto& output_dtype = cur_layer.getDataType();
         std::vector<unsigned> output_shape;
@@ -796,6 +915,26 @@ void MLIRGen::genBatchNormalizationLayer(Layer& prev_layer,
     auto& input_dtype = prev_layer.getDataType();
     auto input_memref = genMemRef(input_shape, input_dtype);
     mlir << input_memref << "\n";
+
+    if(this->isTest()) 
+    {
+        std::string code = "    %" + std::to_string(input_buffer_reg) 
+                         + " = "
+                         + dict[ALLOC]
+                         + "() : "
+                         + input_memref
+                         + " \n";
+        code += "    %c1 = constant 1 : f32 \n";                 
+        code += "    " 
+                + dict[FILLVAR]
+                + "(%c1,%"
+                + std::to_string(input_buffer_reg)
+                + ") : f32, "
+                + input_memref 
+                + "\n";
+        mlir << code << "\n";
+
+    }
 
     // Output Shape, Dim 
     auto& output_dtype = cur_layer.getDataType();
@@ -1423,6 +1562,26 @@ void MLIRGen::genAddLayer(Layer& prev_layer,
     auto input_memref = genMemRef(input_shape, input_dtype);
     mlir << input_memref << "\n";
     
+    // if(this->isTest()) 
+    // {
+    //     std::string code = "    %" + std::to_string(input_buffer_reg) 
+    //                      + " = "
+    //                      + dict[ALLOC]
+    //                      + "() : "
+    //                      + input_memref
+    //                      + " \n";
+    //     code += "    %c1 = constant 1 : f32 \n";                 
+    //     code += "    " 
+    //             + dict[FILLVAR]
+    //             + "(%c1,%"
+    //             + std::to_string(input_buffer_reg)
+    //             + ") : f32, "
+    //             + input_memref 
+    //             + "\n";
+    //     mlir << code << "\n";
+
+    // }
+
     mlir << "    // Input from layer: " << in_layers[1]->getName() << "\n";
         auto input_buffer_reg_1 = variable_map.at(in_layers[1]->getName());
             mlir << "    // Input buffer: %"
@@ -1543,6 +1702,26 @@ void MLIRGen::genGlobalAveragePooling2DLayer(Layer& prev_layer,
     auto input_memref = genMemRef(input_shape, input_dtype);
     mlir << input_memref << "\n";
     
+    if(this->isTest()) 
+    {
+        std::string code = "    %" + std::to_string(input_buffer_reg_0) 
+                         + " = "
+                         + dict[ALLOC]
+                         + "() : "
+                         + input_memref
+                         + " \n";
+        code += "    %c1 = constant 1 : f32 \n";                 
+        code += "    " 
+                + dict[FILLVAR]
+                + "(%c1,%"
+                + std::to_string(input_buffer_reg_0)
+                + ") : f32, "
+                + input_memref 
+                + "\n";
+        mlir << code << "\n";
+
+    }
+
     int num_loops = input_shape.size();
     // Output Shape, Dim 
     auto& output_dtype = cur_layer.getDataType();
@@ -1747,6 +1926,26 @@ void MLIRGen::genSoftMaxLayer(Layer& prev_layer,
     auto& input_dtype = prev_layer.getDataType();
     auto input_memref = genMemRef(input_shape, input_dtype);
     mlir << input_memref << "\n";
+
+    if(this->isTest()) 
+    {
+        std::string code = "    %" + std::to_string(input_buffer_reg) 
+                         + " = "
+                         + dict[ALLOC]
+                         + "() : "
+                         + input_memref
+                         + " \n";
+        code += "    %c1 = constant 1 : f32 \n";                 
+        code += "    " 
+                + dict[FILLVAR]
+                + "(%c1,%"
+                + std::to_string(input_buffer_reg)
+                + ") : f32, "
+                + input_memref 
+                + "\n";
+        mlir << code << "\n";
+
+    }
 
     // Output shape reminds the same
     mlir << "    // Output buffer: %"

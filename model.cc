@@ -72,12 +72,11 @@ void Model::Architecture::MLIRGenerator()
     // testLayers.genTestLayer(testLayers.getLayer(), mlir_gen_fn);
     // testLayers.genTestLayer(layers, layer_id, mlir_gen_fn);
 
-    for(int i=2; i < 3; i++) 
+    for(int i=1; i < layers.size(); i++) 
     {
         // Model::Layer cur_layer = testLayers.getLayer(i);
         std::string layer_test_file_name = mlir_test_gen_folder + "/" + layers[i].getName() + ".mlir";
         testLayers.genTestLayer(layers, i, layer_test_file_name, mlir_gen.getVariableMap());
-        
     }
     /* */
 }
@@ -540,6 +539,8 @@ void Model::TestLayer::genTestLayer(std::vector<Model::Layer>& layers, unsigned 
 {
     // Test the first layer only 
     Linalg::MLIRGen mlir_gen_test(mlir_layer_test_filename);
+    bool is_test = true; 
+    mlir_gen_test.setTest(is_test);
     mlir_gen_test.setVariableMap(variable_map);
     if(!(layers[layer_id].getLayerType() == Layer::Layer_Type::Input))
     {

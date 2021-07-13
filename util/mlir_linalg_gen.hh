@@ -37,8 +37,8 @@ class MLIRGen
     std::vector<std::string> default_index_str;
 
   public:
-    MLIRGen() {};
-    MLIRGen(std::string &_fn)
+    MLIRGen(): is_test(false) {};
+    MLIRGen(std::string &_fn) : is_test(false)
     {
         default_index_str =
             {"a", "b", "c", "d", "e", "f", "g", "h", "i",
@@ -85,7 +85,8 @@ class MLIRGen
     {
       variable_map = variable_map_;
     }
-
+    auto isTest() {return is_test;}
+    void setTest(bool is_test_) { is_test = is_test_;}
   protected:
 
     // TODO: (Vinay) Templatize for tensor and memref
@@ -194,6 +195,7 @@ class MLIRGen
     std::string genMean1D();
     std::string genStdDev1D(); 
     std::string genVariance1D();
+    bool is_test;
 };
 }
 }
