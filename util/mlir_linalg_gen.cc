@@ -180,7 +180,7 @@ void MLIRGen::genConv2DLayer(Layer& prev_layer,
                          + "() : "
                          + input_memref
                          + " \n";
-        code += "    %c1 = constant 1 : f32 \n";                 
+        code += "    %c1 = constant 1.0 : f32 \n";                 
         code += "    " 
                 + dict[FILLVAR]
                 + "(%c1,%"
@@ -344,7 +344,7 @@ void MLIRGen::genActLayer(Layer& prev_layer,
                          + "() : "
                          + input_memref
                          + " \n";
-        code += "    %c1 = constant 1 : f32 \n";                 
+        code += "    %c1 = constant 1.0 : f32 \n";                 
         code += "    " 
                 + dict[FILLVAR]
                 + "(%c1,%"
@@ -411,7 +411,7 @@ void MLIRGen::genMaxPooling2DLayer(Layer& prev_layer,
                          + "() : "
                          + input_memref
                          + " \n";
-        code += "    %c1 = constant 1 : f32 \n";                 
+        code += "    %c1 = constant 1.0 : f32 \n";                 
         code += "    " 
                 + dict[FILLVAR]
                 + "(%c1,%"
@@ -531,7 +531,7 @@ void MLIRGen::genFlattenLayer(Layer& prev_layer,
                          + "() : "
                          + input_memref
                          + " \n";
-        code += "    %c1 = constant 1 : f32 \n";                 
+        code += "    %c1 = constant 1.0 : f32 \n";                 
         code += "    " 
                 + dict[FILLVAR]
                 + "(%c1,%"
@@ -680,7 +680,7 @@ void MLIRGen::genDenseLayer(Layer& prev_layer,
                          + "() : "
                          + input_memref
                          + " \n";
-        code += "    %c1 = constant 1 : f32 \n";                 
+        code += "    %c1 = constant 1.0 : f32 \n";                 
         code += "    " 
                 + dict[FILLVAR]
                 + "(%c1,%"
@@ -791,7 +791,7 @@ void MLIRGen::genZeroPadding2DLayer(Layer& prev_layer,
                              + "() : "
                              + input_memref
                              + " \n";
-            code += "    %c1 = constant 1 : f32 \n";                 
+            code += "    %c1 = constant 1.0 : f32 \n";                 
             code += "    " 
                     + dict[FILLVAR]
                     + "(%c1,%"
@@ -924,7 +924,7 @@ void MLIRGen::genBatchNormalizationLayer(Layer& prev_layer,
                          + "() : "
                          + input_memref
                          + " \n";
-        code += "    %c1 = constant 1 : f32 \n";                 
+        code += "    %c1 = constant 1.0 : f32 \n";                 
         code += "    " 
                 + dict[FILLVAR]
                 + "(%c1,%"
@@ -1570,7 +1570,7 @@ void MLIRGen::genAddLayer(Layer& prev_layer,
     //                      + "() : "
     //                      + input_memref
     //                      + " \n";
-    //     code += "    %c1 = constant 1 : f32 \n";                 
+    //     code += "    %c1 = constant 1.0 : f32 \n";                 
     //     code += "    " 
     //             + dict[FILLVAR]
     //             + "(%c1,%"
@@ -1710,10 +1710,10 @@ void MLIRGen::genGlobalAveragePooling2DLayer(Layer& prev_layer,
                          + "() : "
                          + input_memref
                          + " \n";
-        code += "    %c1 = constant 1 : f32 \n";                 
+        code += "    %v1 = constant 1.0 : f32 \n";                 
         code += "    " 
                 + dict[FILLVAR]
-                + "(%c1,%"
+                + "(%v1,%"
                 + std::to_string(input_buffer_reg_0)
                 + ") : f32, "
                 + input_memref 
@@ -1750,23 +1750,43 @@ void MLIRGen::genGlobalAveragePooling2DLayer(Layer& prev_layer,
 
 
     // Assuming NHWC format, channel comes last. 
-    // Open Loop nest %a 
+    // if(this->isTest())
+    // {
+        std::string index_ssa =  "    %zero = constant 0.0 : f32 \n";
+        index_ssa +=  "    %ci0 = constant 0 : index \n";
+        index_ssa +=  "    %ci1 = constant 1 : index \n";
+        std::unordered_map<int, int> input_index_map;         
+        for (int i = 0; i < input_shape.size(); i++) 
+        {
+            // const auto [it]
+            input_index_map.insert({input_shape[i], i});
+        }
+
+        for ( auto i : input_index_map)
+        {
+            index_ssa +=  "    %ci_Shape_" + std::to_string(i.first) + " = "+ " constant " + std::to_string(i.first) + " : index \n";
+        }
+
+        mlir << index_ssa << "\n";
+    // }
+    
+    // Open Loop nest %a
     std::string loop_open = 
           std::string(4 + (num_loops-4) * 2, ' ')  
           + dict [FOR]
-          + " %" + default_index_str[0] + " = 0 to "
-          + std::to_string(input_shape[0])
-          + " step 1\n"
-          + std::string(4 + (num_loops-1) * 2, ' ') + "{\n"; 
+          + " %" + default_index_str[0] + " = %ci0 to "
+          + "%ci_Shape_" +std::to_string(input_shape[0])
+          + " step "+ "%ci" +"1\n"
+          + std::string(4 + (num_loops-4) * 2, ' ') + "{\n"; 
 
     // Open Loop nest %d 
     loop_open += 
           std::string(4 + (num_loops-3) * 2, ' ')  
           + dict [FOR]
-          + " %" + default_index_str[3] + " = 0 to "
-          + std::to_string(input_shape[0])
-          + " step 1\n"
-          + std::string(4 + (num_loops-1) * 2, ' ') + "{\n"; 
+          + " %" + default_index_str[3] + " = %ci0 to "
+          + "%ci_Shape_" + std::to_string(input_shape[3])
+          + " step "+ "%ci" +"1\n"
+          + std::string(4 + (num_loops-3) * 2, ' ') + "{"; 
     code = loop_open;
     mlir << code << "\n"; 
 
@@ -1794,63 +1814,64 @@ void MLIRGen::genGlobalAveragePooling2DLayer(Layer& prev_layer,
 
     // Temp Reduce Var 
     std::string temp_r_var = "%r2d_t0";
-    code = std::string(4 + (num_loops-4) * 2, ' ')
-        //    + "    %" + std::to_string(buf2d_t0_reg) 
-           + "    " + temp_r_var
-           + " = "
-           + dict[ALLOC]
-           + "() : "
-           + genDataType(cur_layer_dtype)
-           + "\n";
 
-    // HxW dimension/size 
+    // HxW dimension/size  -- integer
     std::string h_w = "\%h_w_dim";
-    code += std::string(4 + (num_loops-4) * 2, ' ')
-        //    + "    %" + std::to_string(buf2d_t0_reg) 
+    code = std::string(4 + (num_loops-3) * 2, ' ')
            + "    " + h_w
            + " = constant "
            + std::to_string(input_shape[1] * input_shape[2])
-           + " : "
+           + ".0 : "
+        //    + " : i32 "
            + genDataType(cur_layer_dtype)
            + "\n";
 
     // Sum temp variable alloc 
     std::string temp_sum_var = "%sum2d_t0";
-    code += std::string(4 + (num_loops-4) * 2, ' ')
-        //    + "    %" + std::to_string(buf2d_t0_reg) 
+    std::vector<unsigned> temp_var_dim = {1};
+    std::string tsv_memref = genMemRef(temp_var_dim, cur_layer_dtype);
+    std::string temp_sum_load = "%sum2d_load";
+    std::string temp_sum_store = "%sum2d_store";
+    code += std::string(4 + (num_loops-3) * 2, ' ')
            + "    " + temp_sum_var
            + " = "
            + dict[ALLOC]
            + "() : "
-        //    + buf2d_t0_memref;
-           + genDataType(cur_layer_dtype)
+           + genMemRef(temp_var_dim, cur_layer_dtype)
            + "\n";
-    mlir << code << "\n";
+    
+    code += std::string(4 + (num_loops-3) * 2, ' ')
+           + "    " 
+           + dict[FILLVAR]
+           + "(%zero,"
+           + temp_sum_var
+           + ") : f32, "
+           + genMemRef(temp_var_dim, cur_layer_dtype) 
+           + "\n";
+    mlir << code;
 
     // Open Loop nest %b 
-    loop_open = 
-          std::string(4 + (num_loops-4) * 2, ' ')  
-          + dict [FOR]
-          + " %" + default_index_str[1] + " = 0 to "
-          + std::to_string(input_shape[0])
-          + " step 1\n"
-          + std::string(4 + (num_loops-1) * 2, ' ') + "{\n"; 
+    loop_open = std::string(4 + (num_loops-1) * 2, ' ')  
+           + dict [FOR]
+           + " %" + default_index_str[1] + " = %ci0 to "
+           + "%ci_Shape_" +std::to_string(input_shape[1])
+           + " step "+ "%ci" +"1\n"
+           + std::string(4 + (num_loops-1) * 2, ' ') + "{\n"; 
 
     // Open Loop nest %c 
     loop_open += 
-          std::string(4 + (num_loops-3) * 2, ' ')  
+          std::string(4 + (num_loops) * 2, ' ')  
           + dict [FOR]
-          + " %" + default_index_str[2] + " = 0 to "
-          + std::to_string(input_shape[0])
-          + " step 1\n"
-          + std::string(4 + (num_loops-1) * 2, ' ') + "{\n"; 
+          + " %" + default_index_str[2] + " = %ci0 to "
+          + "%ci_Shape_" + std::to_string(input_shape[2])
+          + " step "+ "%ci" +"1\n"
+          + std::string(4 + (num_loops) * 2, ' ') + "{\n"; 
     code = loop_open;
-    mlir << code << "\n"; 
+    mlir << code; 
 
     // Load data to tmp var
     std::string tmpLoad = "%ltmp";
-    code = std::string(4 + (num_loops)*2, ' ')
-                // + "%" + std::to_string(ga_t0_reg) 
+    code = std::string(4 + (num_loops+1)*2, ' ')
                 + tmpLoad
                 + " = " 
                 + genLoad(default_index_str,
@@ -1858,31 +1879,56 @@ void MLIRGen::genGlobalAveragePooling2DLayer(Layer& prev_layer,
                           0,
                           input_shape.size(),
                           input_memref) + "\n";
+
+    code += std::string(4 + (num_loops+1)*2, ' ')
+                + temp_sum_load
+                + " = " 
+                + genLoad(default_index_str,
+                          temp_sum_var,
+                          0,
+                          temp_var_dim.size(),
+                          tsv_memref) + "\n";
     
-    code += std::string(4 + (num_loops)*2, ' ')
-            + temp_sum_var
+    code += std::string(4 + (num_loops+1)*2, ' ')
+            + temp_sum_store
             + " = "
             + dict[ADDF]
             + " "
-            + temp_sum_var 
+            + temp_sum_load 
             + ", "
             + tmpLoad 
             + " : "
             + genDataType(cur_layer_dtype)
             + "\n";
-    mlir << code << "\n";
+    code += std::string(4 + (num_loops+1)*2, ' ')
+            + genStore(default_index_str,
+                        temp_sum_store,
+                        temp_sum_var,
+                        temp_var_dim, 
+                        tsv_memref)
+            + "\n";
+    mlir << code;
     
     // Close loop %c and %d
-    code = std::string(4 + (num_loops - 1)*2, ' ') + "}\n";
-    code += std::string(4 + (num_loops - 2)*2, ' ') + "}\n";
+    code = std::string(4 + (num_loops)*2, ' ') + "}\n";
+    code += std::string(4 + (num_loops - 1)*2, ' ') + "}\n";
     mlir << code << "\n";
 
-    code = std::string(4 + (num_loops)*2, ' ')
+    code = std::string(4 + (num_loops - 2)*2, ' ')
+            + temp_sum_load
+            + " = " 
+            + genLoad(default_index_str,
+                      temp_sum_var,
+                      0,
+                      temp_var_dim.size(),
+                      tsv_memref) + "\n";
+
+    code += std::string(4 + (num_loops - 2)*2, ' ')
             + temp_r_var
             + " = "
             + dict[DIVF]
             + " "
-            + temp_sum_var 
+            + temp_sum_load
             + ", "
             + h_w 
             + " : "
@@ -1894,7 +1940,7 @@ void MLIRGen::genGlobalAveragePooling2DLayer(Layer& prev_layer,
     dflt_idx_vector_seq.push_back(0);
     dflt_idx_vector_seq.push_back(3);
 
-    code += std::string(4 + (num_loops)*2, ' ')
+    code += std::string(4 + (num_loops - 2)*2, ' ')
             + genStore(default_index_str,
                         temp_r_var,
                         output_reg,
@@ -1935,7 +1981,7 @@ void MLIRGen::genSoftMaxLayer(Layer& prev_layer,
                          + "() : "
                          + input_memref
                          + " \n";
-        code += "    %c1 = constant 1 : f32 \n";                 
+        code += "    %c1 = constant 1.0 : f32 \n";                 
         code += "    " 
                 + dict[FILLVAR]
                 + "(%c1,%"
@@ -2413,31 +2459,30 @@ std::string MLIRGen::genRelu(unsigned buffer_id,
 
 // }
 
-std::string MLIRGen::genSoftMax(unsigned buffer_id,
-                             std::vector<unsigned> &shape,
-                             std::string &shape_memref,
-                             std::string &dtype)
-{
-    std::string ret;
-    int num_of_loops = shape.size();
-    // auto &cur_layer_dtype = cur_layer.getDataType();
+// std::string MLIRGen::genSoftMax(unsigned buffer_id,
+//                              std::vector<unsigned> &shape,
+//                              std::string &shape_memref,
+//                              std::string &dtype)
+// {
+//     std::string ret;
+//     int num_of_loops = shape.size();
+//     // auto &cur_layer_dtype = cur_layer.getDataType();
 
-    // Gen Exptmp
-    // auto temp_memref = genMemRef(shape, dtype);
-    // std::string code = "\%expt = "
-    //                 //  + " = "
-    //                  + dict[ALLOC]
-    //                  + "() : "
-    //                  + temp_memref
-    //                  + "\n"
-    //                  ;
-    // mlir << code;
-    mlir << "\n";
-}
+//     // Gen Exptmp
+//     // auto temp_memref = genMemRef(shape, dtype);
+//     // std::string code = "\%expt = "
+//     //                 //  + " = "
+//     //                  + dict[ALLOC]
+//     //                  + "() : "
+//     //                  + temp_memref
+//     //                  + "\n"
+//     //                  ;
+//     // mlir << code;
+//     mlir << "\n";
+// }
 
 std::string MLIRGen::genLoad(std::vector<std::string> &index_str,
                              unsigned buffer_id,
-// std::string MLIRGen::genLoad(unsigned buffer_id,
                              unsigned index_start,
                              unsigned index_end,
                              std::string& mem_ref)
@@ -2472,6 +2517,44 @@ std::string MLIRGen::genStore(std::vector<std::string> &index_str,
     }
     ret += ("] : " + mem_ref);
     return ret;
+}
+
+std::string MLIRGen::genLoad(std::vector<std::string>& index_str,
+                    std::string buffer_id,
+                    unsigned index_start,
+                    unsigned index_end,
+                    std::string& mem_ref)
+{
+  std::string ret = dict[LOAD] + " " +buffer_id + "[";
+  for (int i = index_start; i < index_end; i++)
+  {
+      ret += ("%" + default_index_str[i]);
+      if ((index_end - 1) > i)
+          ret += (", ");
+      else
+          ret += ("] ");
+  }
+  // ret += ("%" + index_str[index_end] + "] : " + mem_ref);
+  ret += (" : " + mem_ref);
+  return ret;
+}
+
+std::string MLIRGen::genStore(std::vector<std::string>& index_str,
+                  std::string& val,
+                  std::string buffer_id,
+                  std::vector<unsigned> idx_vec_seq,
+                  std::string& mem_ref)
+{
+  std::string ret = dict[STORE] + " " + val + ", "
+                + buffer_id + "[";
+  for (auto itr = idx_vec_seq.begin(); itr != idx_vec_seq.end(); itr++)
+  {
+      ret += ("%" + default_index_str[*itr]);
+      if (itr < idx_vec_seq.end() - 1)
+          ret += (", ");
+  }
+  ret += ("] : " + mem_ref);
+  return ret;
 }
 
 std::string MLIRGen::genAdd(std::string& out_reg,

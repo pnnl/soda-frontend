@@ -8,6 +8,7 @@
 
 #include "../model.hh"
 #include "mlir_linalg_dict.hh"
+#include <type_traits>
 
 namespace SODA_FrontEnd
 {
@@ -87,8 +88,10 @@ class MLIRGen
     }
     auto isTest() {return is_test;}
     void setTest(bool is_test_) { is_test = is_test_;}
-  protected:
 
+
+  protected:
+    
     // TODO: (Vinay) Templatize for tensor and memref
     std::string genMemRef(std::vector<unsigned> &dims,
                           Layer::Data_Type &d_type);
@@ -116,18 +119,6 @@ class MLIRGen
                         std::string&,
                         std::string&);
 
-    std::string genLoad(std::vector<std::string>&,
-                        unsigned,
-                        unsigned,
-                        unsigned,
-                        std::string&);
-
-    std::string genStore(std::vector<std::string> &,
-                          std::string &,
-                          unsigned,
-                          std::vector<unsigned>,
-                          std::string&);
-
     std::string genAdd(std::string&,
                        std::string&,
                        std::string&,
@@ -141,9 +132,28 @@ class MLIRGen
                           std::vector<unsigned>&,
                           std::string&,
                           std::string&);
-    // std::string genLoad(unsigned,unsigned,unsigned,std::string&);
+  
+    std::string genLoad(std::vector<std::string>& index_str,
+                        std::string buffer_id,
+                        unsigned index_start,
+                        unsigned index_end,
+                        std::string& mem_ref);
+    std::string genLoad(std::vector<std::string>& index_str,
+                        unsigned buffer_id,
+                        unsigned index_start,
+                        unsigned index_end,
+                        std::string& mem_ref);
+    std::string genStore(std::vector<std::string>& index_str,
+                      std::string& val,
+                      std::string buffer_id,
+                      std::vector<unsigned> idx_vec_seq,
+                      std::string& mem_ref);
+    std::string genStore(std::vector<std::string>& index_str,
+                      std::string& val,
+                      unsigned buffer_id,
+                      std::vector<unsigned> idx_vec_seq,
+                      std::string& mem_ref);                      
 
-    // std::string genStore(std::string&,unsigned,unsigned,unsigned,std::string&);
     std::string genExp(unsigned,
                        unsigned,
                        std::vector<unsigned>&,
@@ -184,7 +194,6 @@ class MLIRGen
                            std::string &dtype,
                            std::string &sum_var);
 
-
     std::string genZeroF()
     {
         return "\%zero = constant 0.00000e+00 : f32";
@@ -195,8 +204,11 @@ class MLIRGen
     std::string genMean1D();
     std::string genStdDev1D(); 
     std::string genVariance1D();
+
     bool is_test;
 };
+
+
 }
 }
 
