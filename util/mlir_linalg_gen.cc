@@ -85,7 +85,7 @@ void MLIRGen::genKernelLoad(Layer& layer)
         auto gamma_dim = layer.getGammaDim();
         auto gamma_memref = genMemRef(gamma_dim,
                                        cur_layer_dtype);
-        auto tensor_const = genTensorConstF1D(layer.getGamma(),
+        auto tensor_const_gamma = genTensorConstF1D(layer.getGamma(),
                                               gamma_dim,
                                               cur_layer_dtype);
         
@@ -93,7 +93,18 @@ void MLIRGen::genKernelLoad(Layer& layer)
 
         mlir << "memref.global \"private\" constant "
              << var_name << " : " << gamma_memref
-             << " = dense<" << tensor_const << ">\n\n";                                      
+             << " = dense<" << tensor_const_gamma << ">\n\n";
+
+        auto beta_dim = layer.getBetaDim();
+        auto beta_memref = genMemRef(beta_dim, cur_layer_dtype);
+        auto tensor_const_beta = genTensorConstF1D(layer.getBeta(),
+                                              beta_dim,
+                                              cur_layer_dtype);
+        auto var_name_beta = "@" + layer.getName() + "_beta";
+
+        mlir << "memref.global \"private\" constant "
+             << var_name_beta << " : " << beta_memref
+             << " = dense<" << tensor_const_beta << ">\n\n";                                                                     
     }
 
 }
@@ -924,10 +935,10 @@ void MLIRGen::genBatchNormalizationLayer(Layer& prev_layer,
                          + "() : "
                          + input_memref
                          + " \n";
-        code += "    %c1 = constant 1.0 : f32 \n";                 
+        code += "    %v1 = constant 1.0 : f32 \n";                 
         code += "    " 
                 + dict[FILLVAR]
-                + "(%c1,%"
+                + "(%v1,%"
                 + std::to_string(input_buffer_reg)
                 + ") : f32, "
                 + input_memref 
@@ -1046,6 +1057,23 @@ void MLIRGen::genBatchNormalizationLayer(Layer& prev_layer,
         mlir << code << "\n";
 
         // -------------------------------------
+        std::string index_ssa =  "    %zero = constant 0.0 : f32 \n";
+        index_ssa +=  "    %ci0 = constant 0 : index \n";
+        index_ssa +=  "    %ci1 = constant 1 : index \n";
+        std::unordered_map<int, int> input_index_map;         
+        for (int i = 0; i < input_shape.size(); i++) 
+        {
+            // const auto [it]
+            input_index_map.insert({input_shape[i], i});
+        }
+
+        for ( auto i : input_index_map)
+        {
+            index_ssa +=  "    %ci_Shape_" + std::to_string(i.first) + " = "+ " constant " + std::to_string(i.first) + " : index \n";
+        }
+
+        mlir << index_ssa << "\n";
+
         code = "    %c0 = constant 0 : index \n";
         code += "    %c1 = constant 1 : index \n";
         // Gen Loop for Sum 
@@ -1056,10 +1084,11 @@ void MLIRGen::genBatchNormalizationLayer(Layer& prev_layer,
             std::string one_loop =
                 std::string(4 + (i) * 2, ' ')
                 + dict[FOR]
-                + " %" + default_index_str[i] + " = 0 to "
-                + std::to_string(input_shape[i])
-                + " step 1\n"
-                + std::string(4 + (i-1) * 2, ' ') + "{\n";
+                + " %" + default_index_str[i] + " = %ci0 to "
+                + "%ci_Shape_"+ std::to_string(input_shape[i])
+                + " step %ci1\n"
+                + std::string(4 + (i) * 2, ' ') + "{\n";
+                // + std::string(4 + (i-1) * 2, ' ') + "{\n";
             code += one_loop;
         }
         
@@ -1083,10 +1112,10 @@ void MLIRGen::genBatchNormalizationLayer(Layer& prev_layer,
         //        + batch_sum_1d_memref
         //        + "\n";
 
-        code += std::string(4 + (num_loops -1   ) * 2, ' ')  
+        code += std::string(4 + (num_loops) * 2, ' ')  
                 + " // Load Mean for Batch Norm\n";
         std::string mean_bn = "%mean_" + cur_layer.getName();
-        code += std::string(4 + (num_loops -1) * 2, ' ') 
+        code += std::string(4 + (num_loops) * 2, ' ') 
                 + mean_bn 
                 + " = constant "
                 + std::to_string(moving_mean_val[0]) 
@@ -1295,10 +1324,10 @@ void MLIRGen::genBatchNormalizationLayer(Layer& prev_layer,
         //         + "\n";
 
         // --------------------------------------------------------------
-        code += std::string(4 + (num_loops -1) * 2, ' ') 
+        code += std::string(4 + (num_loops) * 2, ' ') 
                 + " // Load Variance     for Batch Norm\n";
         std::string variance_bn = "%variance_" + cur_layer.getName();
-        code += std::string(4 + (num_loops -1) * 2, ' ') 
+        code += std::string(4 + (num_loops) * 2, ' ') 
                 + variance_bn 
                 + " = constant "
                 + std::to_string(moving_variance_val[0]) 
@@ -1307,10 +1336,10 @@ void MLIRGen::genBatchNormalizationLayer(Layer& prev_layer,
                 + "\n";
 
         // Var - epsilon
-        code += std::string(4 + (num_loops -1) * 2, ' ') 
+        code += std::string(4 + (num_loops) * 2, ' ') 
                 + " // Load Epsilon for Batch Norm\n";
         std::string epsilon_bn = "%epsilon_" + cur_layer.getName();
-        code += std::string(4 + (num_loops -1) * 2, ' ') 
+        code += std::string(4 + (num_loops) * 2, ' ') 
                 + epsilon_bn 
                 + " = constant "
                 + std::to_string(cur_layer.getEpsilon())
@@ -1382,8 +1411,8 @@ void MLIRGen::genBatchNormalizationLayer(Layer& prev_layer,
                 + "%" + std::to_string(diff_t2_reg) 
                 + " = "
                 + dict[SUBF]
-                + " %"
                 // + std::to_string(load_t2_reg)
+                + " "
                 + epsilon_bn
                 + ", "
                 + variance_bn
@@ -1401,10 +1430,7 @@ void MLIRGen::genBatchNormalizationLayer(Layer& prev_layer,
                 + "%" + std::to_string(rsqrt_t0_reg)
                 + " = "
                 + dict[RSQRT]
-                + " "
-                // + variance_bn
-                + ", %"
-                + std::to_string(diff_t2_reg)
+                + " %"+ std::to_string(diff_t2_reg)
                 + " : "
                 + genDataType(cur_layer_dtype)
                 + "\n";
@@ -1498,7 +1524,7 @@ void MLIRGen::genBatchNormalizationLayer(Layer& prev_layer,
                 + " = "
                 + dict[ADDF]
                 + " %"
-                + std::to_string(add_t0_reg)
+                + std::to_string(load_t4_reg)
                 + ", %"
                 + std::to_string(mult_t1_reg)
                 + " : "
