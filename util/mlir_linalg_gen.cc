@@ -355,10 +355,10 @@ void MLIRGen::genActLayer(Layer& prev_layer,
                          + "() : "
                          + input_memref
                          + " \n";
-        code += "    %c1 = constant 1.0 : f32 \n";                 
+        code += "    %v1 = constant 1.0 : f32 \n";                 
         code += "    " 
                 + dict[FILLVAR]
-                + "(%c1,%"
+                + "(%v1,%"
                 + std::to_string(input_buffer_reg)
                 + ") : f32, "
                 + input_memref 
@@ -802,10 +802,10 @@ void MLIRGen::genZeroPadding2DLayer(Layer& prev_layer,
                              + "() : "
                              + input_memref
                              + " \n";
-            code += "    %c1 = constant 1.0 : f32 \n";                 
+            code += "    %v1 = constant 1.0 : f32 \n";                 
             code += "    " 
                     + dict[FILLVAR]
-                    + "(%c1,%"
+                    + "(%v1,%"
                     + std::to_string(input_buffer_reg)
                     + ") : f32, "
                     + input_memref 
@@ -838,7 +838,10 @@ void MLIRGen::genZeroPadding2DLayer(Layer& prev_layer,
             std::cout << "Variable map insertion failure" << std::endl;
         }
         auto tensor0_reg = variable_map.at(tensor0_name);
-        auto tensor0_memref = genMemRef2(input_shape, cur_layer_dtype);
+        auto tensor0_memref = genMemRef(input_shape, cur_layer_dtype);
+        auto tensorOut_memref = genMemRef(output_shape, cur_layer_dtype);
+        // auto tensor0_memref = genMemRef2(input_shape, cur_layer_dtype);
+        // auto tensorOut_memref = genMemRef2(output_shape, cur_layer_dtype);
 
         std::string code = "    %" + std::to_string(tensor0_reg)
                             + " = "
@@ -846,32 +849,37 @@ void MLIRGen::genZeroPadding2DLayer(Layer& prev_layer,
                             + std::to_string(input_buffer_reg)
                             + " : "
                             + tensor0_memref
-                            + ", #layout, memspace0>";
-        mlir << code << "\n";
+                            // + ", #layout, memspace0>";
+                            + "\n";
+        mlir << code;
 
         // Pad tensor
         // TODO: (Vinay), (automate) handle constant variables
         // TODO: (Vinay), layer data type, int32/f32
         auto tensor0_tensor = genTensor(input_shape, cur_layer_dtype);
-        code = "    %const0 = constant 0 : f32";
-        mlir << code << "\n";
-        code = "    %pad_value = %const0 : f32";
-        mlir << code << "\n";
-        code = "    %" + std::to_string(tensor0_reg)
+        auto tensor1_tensor = genTensor(output_shape, cur_layer_dtype);
+        code = "    %v0 = constant 0.0 : f32 \n";
+        mlir << code;
+        // code = "    %pad_value = %const0 : f32";
+        // mlir << code << "\n";
+        std::string tensor_store = "%tensor_store";
+        // code = "    %" + std::to_string(tensor0_reg)
+        code = "    " + tensor_store
                 + " = "
                 + "linalg.pad_tensor %"
                 + std::to_string(tensor0_reg)
-                + " low[" + std::to_string(lp[0])
-                + ", " + std::to_string(lp[1]) + "]"
-                + " high[" + std::to_string(lp[2])
-                + ", " + std::to_string(lp[3]) + "] {\n"
-                + "    ^bb0(%arg0 : index, %arg1 : index):\n"
-                + "      linalg.yield %pad_value : f32\n"
+                + " low[0," + std::to_string(lp[0])
+                + ", " + std::to_string(lp[1]) + ",0]"
+                + " high[0," + std::to_string(lp[2])
+                + ", " + std::to_string(lp[3]) + ",0] {\n"
+                + "    ^bb0(%arg0 : index, %arg1 : index, %arg2 : index, %arg3 : index):\n"
+                + "      linalg.yield %v0 : f32\n"
                 + "    } : "
                 + tensor0_tensor
                 + " to "
-                + tensor0_tensor;
-        mlir << code << "\n";
+                + tensor1_tensor
+                + "\n";
+        mlir << code;
 
         // TODO: (Vinay) Free above memref? 
         // Store Tensor to Memref
@@ -894,15 +902,18 @@ void MLIRGen::genZeroPadding2DLayer(Layer& prev_layer,
         auto output_reg = variable_map.at(cur_layer.getName());
         code = "    %" + std::to_string(output_reg) 
                 + " = " 
-                + "alloc() : "
-                + tensor0_memref + ", #layout, memspace0>" 
-                + "\n"
-                + "    memref.tensor_store %"
-                + std::to_string(tensor0_reg)
+                + dict[ALLOC]
+                + "() : "
+                + tensorOut_memref //+ ", #layout, memspace0>" 
+                + "\n";
+
+        code += "    memref.tensor_store "
+                // + std::to_string(tensor0_reg)
+                + tensor_store
                 + ", %"
                 + std::to_string(output_reg)
                 + " : " 
-                + tensor0_memref + ", #layout, memspace0>"
+                + tensorOut_memref //+ ", #layout, memspace0>"
                 + "\n"
                 ;
         mlir << code; 
@@ -1082,7 +1093,7 @@ void MLIRGen::genBatchNormalizationLayer(Layer& prev_layer,
         for (auto i = 0; i < num_loops; i++)
         {
             std::string one_loop =
-                std::string(4 + (i) * 2, ' ')
+                std::string(4 + i * 2, ' ')
                 + dict[FOR]
                 + " %" + default_index_str[i] + " = %ci0 to "
                 + "%ci_Shape_"+ std::to_string(input_shape[i])
@@ -2412,15 +2423,37 @@ std::string MLIRGen::genRelu(unsigned buffer_id,
 
     int num_of_loops = shape.size();
 
+    // -------------------------------------
+    std::string index_ssa =  "    %zero_ = constant 0.0 : f32 \n";
+    index_ssa +=  "    %ci0 = constant 0 : index \n";
+    index_ssa +=  "    %ci1 = constant 1 : index \n";
+    std::unordered_map<int, int> input_index_map;         
+    for (int i = 0; i < shape.size(); i++) 
+    {
+        // const auto [it]
+        input_index_map.insert({shape[i], i});
+    }
+
+    for ( auto i : input_index_map)
+    {
+        index_ssa +=  "    %ci_Shape_" + std::to_string(i.first) + " = "+ " constant " + std::to_string(i.first) + " : index \n";
+    }
+
+    mlir << index_ssa << "\n";
+
+    // std::string code = "    %c0 = constant 0 : index \n";
+    // code += "    %c1 = constant 1 : index \n";
+    // mlir << code;
+
     // Gen loop statement
     for (auto i = 0; i < num_of_loops; i++)
     {
         std::string one_loop =
             std::string(4 + i * 2, ' ')
             + dict[FOR]
-            + " %" + default_index_str[i] + " = 0 to "
-            + std::to_string(shape[i])
-            + " step 1\n"
+            + " %" + default_index_str[i] + " = %ci0 to "
+            + "%ci_Shape_" + std::to_string(shape[i])
+            + " step %ci1\n"
             + std::string(4 + i * 2, ' ') + "{\n";
         ret += one_loop;
     }
@@ -2445,7 +2478,7 @@ std::string MLIRGen::genRelu(unsigned buffer_id,
 
     // Gen compare
     ret += (std::string(4 + num_of_loops * 2, ' ') +
-           "\%cond = " + dict[CMPLT] + ", %tmp, \%zero : " +
+           "\%cond = " + dict[CMPLT] + ", %tmp, "+ zero+ " : " +
            dtype + "\n");
 
     // Gen if-store
