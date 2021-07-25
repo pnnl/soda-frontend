@@ -1361,7 +1361,7 @@ void MLIRGen::genBatchNormalizationLayer(Layer& prev_layer,
         // std::string variance_sub_ep_var = "%var_sub_ep";
 
         // Evaluate for each array element and store
-        code += std::string(4 + (num_loops-1) * 2, ' ') + " // Store Normalized Value\n";
+        
         // //Open loop 
         // std::string loop_open =
         //     std::string(4 + (num_loops-1) * 2, ' ')
@@ -1421,7 +1421,7 @@ void MLIRGen::genBatchNormalizationLayer(Layer& prev_layer,
         code += std::string(4 + (num_loops)*2, ' ') 
                 + "%" + std::to_string(diff_t2_reg) 
                 + " = "
-                + dict[SUBF]
+                + dict[ADDF]
                 // + std::to_string(load_t2_reg)
                 + " "
                 + epsilon_bn
@@ -1543,6 +1543,7 @@ void MLIRGen::genBatchNormalizationLayer(Layer& prev_layer,
                 + "\n";
 
         // Store result 
+        code += std::string(4 + (num_loops-1) * 2, ' ') + " // Store Normalized Value\n";
         std::string store_t2_str = "%" + std::to_string(add_t0_reg);
         // IDX vector 
         std::vector<unsigned> dflt_idx_vector_seq;
@@ -1599,25 +1600,25 @@ void MLIRGen::genAddLayer(Layer& prev_layer,
     auto input_memref = genMemRef(input_shape, input_dtype);
     mlir << input_memref << "\n";
     
-    // if(this->isTest()) 
-    // {
-    //     std::string code = "    %" + std::to_string(input_buffer_reg) 
-    //                      + " = "
-    //                      + dict[ALLOC]
-    //                      + "() : "
-    //                      + input_memref
-    //                      + " \n";
-    //     code += "    %c1 = constant 1.0 : f32 \n";                 
-    //     code += "    " 
-    //             + dict[FILLVAR]
-    //             + "(%c1,%"
-    //             + std::to_string(input_buffer_reg)
-    //             + ") : f32, "
-    //             + input_memref 
-    //             + "\n";
-    //     mlir << code << "\n";
+    if(this->isTest()) 
+    {
+        std::string code = "    %" + std::to_string(input_buffer_reg) 
+                         + " = "
+                         + dict[ALLOC]
+                         + "() : "
+                         + input_memref
+                         + " \n";
+        code += "    %c1 = constant 1.0 : f32 \n";                 
+        code += "    " 
+                + dict[FILLVAR]
+                + "(%c1,%"
+                + std::to_string(input_buffer_reg)
+                + ") : f32, "
+                + input_memref 
+                + "\n";
+        mlir << code << "\n";
 
-    // }
+    }
 
     mlir << "    // Input from layer: " << in_layers[1]->getName() << "\n";
         auto input_buffer_reg_1 = variable_map.at(in_layers[1]->getName());
