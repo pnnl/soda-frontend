@@ -1599,32 +1599,46 @@ void MLIRGen::genAddLayer(Layer& prev_layer,
     auto& input_dtype = in_layers[0]->getDataType();
     auto input_memref = genMemRef(input_shape, input_dtype);
     mlir << input_memref << "\n";
-    
+  
+    mlir << "    // Input from layer: " << in_layers[1]->getName() << "\n";
+        auto input_buffer_reg_1 = variable_map.at(in_layers[1]->getName());
+            mlir << "    // Input buffer: %"
+             << input_buffer_reg_1 << " : ";
+    mlir << input_memref << "\n";
+
     if(this->isTest()) 
     {
-        std::string code = "    %" + std::to_string(input_buffer_reg) 
-                         + " = "
-                         + dict[ALLOC]
-                         + "() : "
-                         + input_memref
-                         + " \n";
-        code += "    %c1 = constant 1.0 : f32 \n";                 
+        std::string code = "    %" + std::to_string(input_buffer_reg_0) 
+                 + " = "
+                 + dict[ALLOC]
+                 + "() : "
+                 + input_memref
+                 + " \n";
+        code += "    %" + std::to_string(input_buffer_reg_1) 
+                 + " = "
+                 + dict[ALLOC]
+                 + "() : "
+                 + input_memref
+                 + " \n";
+
+        code += "    %v1 = constant 1.0 : f32 \n";                 
         code += "    " 
                 + dict[FILLVAR]
-                + "(%c1,%"
-                + std::to_string(input_buffer_reg)
+                + "(%v1,%"
+                + std::to_string(input_buffer_reg_0)
+                + ") : f32, "
+                + input_memref 
+                + "\n";
+        code += "    " 
+                + dict[FILLVAR]
+                + "(%v1,%"
+                + std::to_string(input_buffer_reg_1)
                 + ") : f32, "
                 + input_memref 
                 + "\n";
         mlir << code << "\n";
 
     }
-
-    mlir << "    // Input from layer: " << in_layers[1]->getName() << "\n";
-        auto input_buffer_reg_1 = variable_map.at(in_layers[1]->getName());
-            mlir << "    // Input buffer: %"
-             << input_buffer_reg_1 << " : ";
-    mlir << input_memref << "\n";
 
     auto& output_dtype = cur_layer.getDataType();
     auto output_shape = input_shape;
@@ -1636,87 +1650,130 @@ void MLIRGen::genAddLayer(Layer& prev_layer,
         for (auto dim : output_shape) { mlir << dim << " "; }
     mlir << "\n";
     cur_layer.setOutputDim(output_shape);
-
-     // Load input memref to a tensor
     auto &cur_layer_dtype = cur_layer.getDataType();
-    auto tensor0_name = cur_layer.getName() + "_tensor0";
-    const auto [it_var1, flag1] = variable_map.insert({tensor0_name,global_register_tracker++});
-    if(!flag1) {
-        std::cout << "Variable map insertion failure" << std::endl;
-    }
-    auto tensor0_reg = variable_map.at(tensor0_name);
-    auto tensor0_memref = genMemRef2(input_shape, cur_layer_dtype);
-
-    std::string code = "    %" + std::to_string(tensor0_reg)
-                        + " = "
-                        + "memref.tensor_load %"
-                        + std::to_string(input_buffer_reg_0)
-                        + " : "
-                        + tensor0_memref
-                        + ", #layout, memspace0>";
-    mlir << code << "\n";
-      // --
-    // auto &cur_layer_dtype = cur_layer.getDataType();
-    auto tensor1_name = cur_layer.getName() + "_tensor1";
-    const auto [it_var2, flag2] = variable_map.insert({tensor1_name,global_register_tracker++});
-    if(!flag2) {
-        std::cout << "Variable map insertion failure" << std::endl;
-    }
-    auto tensor1_reg = variable_map.at(tensor1_name);
-    auto tensor1_memref = genMemRef2(input_shape, cur_layer_dtype);
-
-    code = "    %" + std::to_string(tensor1_reg)
-                        + " = "
-                        + "memref.tensor_load %"
-                        + std::to_string(input_buffer_reg_1)
-                        + " : "
-                        + tensor1_memref
-                        + ", #layout, memspace0>";
-    mlir << code << "\n";
-
-    //-------
-    // Add tensors: 
-    auto tensor0_tensor = genTensor(input_shape, cur_layer_dtype);
-    // LHS tensor to store result of ADD: 
-    auto tensor2_name = cur_layer.getName() + "_tensor2";
-    const auto [it_var3, flag3] = variable_map.insert({tensor2_name,global_register_tracker++});
-    if(!flag1) {
-        std::cout << "Variable map insertion failure" << std::endl;
-    }
-    auto tensor2_reg = variable_map.at(tensor2_name);
-    auto tensor2_memref = genMemRef2(input_shape, cur_layer_dtype);
-    code = "    %" + std::to_string(tensor2_reg)
-            + " = "
-            + dict[ADDF]
-            +" %"
-            + std::to_string(tensor0_reg)
-            + ", %"
-            + std::to_string(tensor1_reg)
-            + " : "
-            + tensor0_tensor;
-    mlir << code << "\n";
-
-    // Output SSA
-    const auto [it_var4, flag4] = variable_map.insert({cur_layer.getName(),global_register_tracker++});
-    if(!flag4) {
+    const auto [it_var0, flag0] = variable_map.insert({cur_layer.getName(),global_register_tracker++});
+    if(!flag0) {
         std::cout << "Variable map insertion failure" << std::endl;
     }
     auto output_reg = variable_map.at(cur_layer.getName());
-    code = "    %" + std::to_string(output_reg) 
-            + " = " 
-            + "alloc() : "
-            + tensor0_memref + ", #layout, memspace0>" 
-            + "\n"
-            + "    memref.tensor_store %"
-            + std::to_string(tensor2_reg)
+    auto output_memref = genMemRef(output_shape, cur_layer_dtype);
+    // alloc output_reg 
+    std::string code = "    %" + std::to_string(output_reg)
+                       + " = "
+                       + dict[ALLOC]
+                       + "() : "
+                       + output_memref
+                       + "\n";
+    mlir << code;
+    // -------------------------------------
+    std::string index_ssa =  "    %zero = constant 0.0 : f32 \n";
+    index_ssa +=  "    %ci0 = constant 0 : index \n";
+    index_ssa +=  "    %ci1 = constant 1 : index \n";
+    std::unordered_map<int, int> input_index_map;         
+    for (int i = 0; i < input_shape.size(); i++) 
+    {
+        // const auto [it]
+        input_index_map.insert({input_shape[i], i});
+    }
+
+    for ( auto i : input_index_map)
+    {
+        index_ssa +=  "    %ci_Shape_" + std::to_string(i.first) + " = "+ " constant " + std::to_string(i.first) + " : index \n";
+    }
+
+    mlir << index_ssa << "\n";
+
+    code = "";
+    // Gen Loop
+    int num_loops = input_shape.size();
+    for (auto i = 0; i < num_loops; i++)
+    {
+        std::string one_loop =
+            std::string(4 + i * 2, ' ')
+            + dict[FOR]
+            + " %" + default_index_str[i] + " = %ci0 to "
+            + "%ci_Shape_"+ std::to_string(input_shape[i])
+            + " step %ci1\n"
+            + std::string(4 + (i) * 2, ' ') + "{\n";
+            // + std::string(4 + (i-1) * 2, ' ') + "{\n";
+        code += one_loop;
+    }
+
+    // load temp data
+    auto load_t0_name = cur_layer.getName() + "_load_t0";
+    const auto [it_var1, flag1] = variable_map.insert({load_t0_name,global_register_tracker++});
+    if(!flag1) {
+        std::cout << "Variable map insertion failure" << std::endl;
+    }
+    auto load_t0_reg = variable_map.at(load_t0_name);
+    code += std::string(4 + (num_loops)*2, ' ')
+                        + "%" + std::to_string(load_t0_reg)
+                        + " = " 
+                        + genLoad(default_index_str,
+                                    input_buffer_reg_0, 
+                                    0,
+                                    input_shape.size(),
+                                    input_memref) + "\n";
+    auto load_t1_name = cur_layer.getName() + "_load_t1";
+    const auto [it_var2, flag2] = variable_map.insert({load_t1_name,global_register_tracker++});
+    if(!flag2) {
+        std::cout << "Variable map insertion failure" << std::endl;
+    }
+    auto load_t1_reg = variable_map.at(load_t1_name);
+    code += std::string(4 + (num_loops)*2, ' ')
+                        + "%" + std::to_string(load_t1_reg)
+                        + " = " 
+                        + genLoad(default_index_str,
+                                    input_buffer_reg_1, 
+                                    0,
+                                    input_shape.size(),
+                                    input_memref) + "\n";
+    
+
+    auto add_t0_name = cur_layer.getName() + "_add_t0";
+    const auto [it_var3, flag3] = variable_map.insert({add_t0_name,global_register_tracker++});
+    if(!flag3) {
+        std::cout << "Variable map insertion failure" << std::endl;
+    }
+    auto add_t0_reg = variable_map.at(add_t0_name);
+    code += std::string(4 + (num_loops)*2, ' ') 
+            + "%" + std::to_string(add_t0_reg) 
+            + " = "
+            + dict[ADDF]
+            // + std::to_string(load_t2_reg)
+            + " %"
+            + std::to_string(load_t0_reg)
             + ", %"
-            + std::to_string(output_reg)
-            + " : " 
-            + tensor0_memref + ", #layout, memspace0>"
-            + "\n"
-            ;
-    mlir << code; 
-    mlir << "\n";
+            + std::to_string(load_t1_reg)
+            + " : "
+            + genDataType(cur_layer_dtype)
+            + "\n";
+
+    // Store result 
+    code += std::string(4 + (num_loops) * 2, ' ') + " // Store Sum Value\n";
+    std::string store_t2_str = "%" + std::to_string(add_t0_reg);
+    // IDX vector 
+    std::vector<unsigned> dflt_idx_vector_seq;
+    for (int i=0; i < output_shape.size(); i++)
+        dflt_idx_vector_seq.push_back(i);
+    code += std::string(4 + (num_loops)*2, ' ')
+            + genStore(default_index_str,
+                       store_t2_str,
+                       output_reg,
+                       dflt_idx_vector_seq,
+                       output_memref)
+            + "\n";
+
+    for (int i = output_shape.size() - 1; i >= 0; i--)
+    {
+        std::string loop_nest =
+            std::string(4 + i * 2, ' ') + "}\n";
+        code += loop_nest;
+    }
+    code += "\n";
+    mlir << code;
+
+
 
 }
 
