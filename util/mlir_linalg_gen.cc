@@ -881,19 +881,6 @@ void MLIRGen::genZeroPadding2DLayer(Layer& prev_layer,
                 + "\n";
         mlir << code;
 
-        // TODO: (Vinay) Free above memref? 
-        // Store Tensor to Memref
-        // Get Dim:
-        
-        // auto tensor0Dim_name =  cur_layer.getName() + "_tensor0Dim";
-        // const auto [it_var1, flag2] = variable_map.insert({tensor0Dim_name,global_register_tracker++});
-        // if(!flag2) {
-        //     std::cout << "Variable map insertion failure" << std::endl;
-        // }
-        // auto tensor0Dim_reg = variable_map.at(tensor0_name);
-        // code = "    %" + std::to_string(tensor0Dim_reg) 
-        //         + " dim %" + std::to_string(tensor0_reg)
-
         // Output SSA
         const auto [it_var2, flag2] = variable_map.insert({cur_layer.getName(),global_register_tracker++});
         if(!flag2) {
@@ -902,20 +889,11 @@ void MLIRGen::genZeroPadding2DLayer(Layer& prev_layer,
         auto output_reg = variable_map.at(cur_layer.getName());
         code = "    %" + std::to_string(output_reg) 
                 + " = " 
-                + dict[ALLOC]
-                + "() : "
-                + tensorOut_memref //+ ", #layout, memspace0>" 
-                + "\n";
-
-        code += "    memref.tensor_store "
-                // + std::to_string(tensor0_reg)
+                + "memref.buffer_cast "
                 + tensor_store
-                + ", %"
-                + std::to_string(output_reg)
-                + " : " 
-                + tensorOut_memref //+ ", #layout, memspace0>"
-                + "\n"
-                ;
+                + " : "
+                + tensorOut_memref
+                + "\n";
         mlir << code; 
         mlir << "\n";
 
