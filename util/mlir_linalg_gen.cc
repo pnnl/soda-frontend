@@ -5,6 +5,7 @@
 #include <cassert>
 #include <cmath>
 #include <cassert>
+#include <algorithm>
 namespace SODA_FrontEnd
 {
 namespace Linalg
@@ -435,6 +436,7 @@ void MLIRGen::genMaxPooling2DLayer(Layer& prev_layer,
     }
 
     auto &kernel = cur_layer.getKernelDim();
+    mlir << "    // Kernel size: " + std::to_string(kernel.size()) + "\n";
     mlir << "    // Kernel dim.: ";
     for (auto dim : kernel) { mlir << dim << " "; }
     mlir << "\n";
@@ -450,10 +452,10 @@ void MLIRGen::genMaxPooling2DLayer(Layer& prev_layer,
     unsigned out_height, out_width;
     if (cur_layer.padding_type == Layer::Padding_Type::valid)
     {
-        out_height = ceil(float(input_shape[1] - kernel[0] + 1) /
+        out_height = ceil(float(input_shape[1] - kernel[1] + 1) /
                      float(stride[0]));
 
-        out_width = ceil(float(input_shape[2] - kernel[1] + 1) /
+        out_width = ceil(float(input_shape[2] - kernel[2] + 1) /
                      float(stride[1]));
     }
 
@@ -466,7 +468,7 @@ void MLIRGen::genMaxPooling2DLayer(Layer& prev_layer,
     mlir << "\n";
     cur_layer.setOutputDim(output_shape);
 
-    // alloc kernel
+    // alloc kernel - Maxpool: Dimensions
     auto &cur_layer_dtype = cur_layer.getDataType();
     auto kernel_name = cur_layer.getName() + "_kernel";
     const auto [it_var1, flag1] = variable_map.insert({kernel_name,global_register_tracker++});
@@ -474,13 +476,89 @@ void MLIRGen::genMaxPooling2DLayer(Layer& prev_layer,
         std::cout << "Variable map insertion failure" << std::endl;
     }
     auto kernel_reg = variable_map.at(kernel_name);
-    auto kernel_memref = genMemRef(kernel, cur_layer_dtype);
+    auto kernel_dtype = Layer::Data_Type::i32;
+    auto kernel_memref = genMemRef(kernel, kernel_dtype);
     std::string code = "    %" + std::to_string(kernel_reg)
                      + " = "
                      + dict[ALLOC]
                      + "() : "
-                     + kernel_memref;
-    mlir << code << "\n";
+                     + kernel_memref
+                     + "\n";
+
+    // Generate index values for accessing the kernel
+    int max_dim_sz = *max_element(kernel.begin(), kernel.end());
+    for(int i = 0; i < max_dim_sz; i++) 
+    {
+        code += "    %" 
+                + kernel_name
+                + "_ci"
+                + std::to_string(i)
+                + " = constant "
+                + std::to_string(i)
+                + " : index \n";
+    }
+    // Generate Kernel Dimension values (integers); Dimension starts with 1
+    std::unordered_map<int, int> input_index_map;         
+    for (int i = 0; i < kernel.size(); i++) 
+    {
+        // const auto [it]
+        input_index_map.insert({kernel[i], i});
+    }
+    // for(int i = 0; i < max_dim_sz; i++) 
+    for (auto i : input_index_map)
+    {
+        code += "    %" 
+                + kernel_name
+                + "_i"
+                + std::to_string(i.first)
+                + " = constant "
+                + std::to_string(i.first)
+                + " : i32 \n";
+    }
+
+    // following works only for MaxPOOL2D 
+    code += "    memref.store %" + kernel_name + "_i" 
+            + std::to_string(kernel[0])
+            + " , %" + std::to_string(kernel_reg) 
+            + " ["
+            + "%" + kernel_name + "_ci" + std::to_string(0) + ", "
+            + "%" + kernel_name + "_ci" + std::to_string(0) + ", "
+            + "%" + kernel_name + "_ci" + std::to_string(0) + ", "
+            + "%" + kernel_name + "_ci" + std::to_string(0) 
+            + "] : "
+            + kernel_memref + "\n";
+    code += "    memref.store %" + kernel_name + "_i" 
+            + std::to_string(kernel[1])
+            + " , %" + std::to_string(kernel_reg) 
+            + " ["
+            + "%" + kernel_name + "_ci" + std::to_string(0) + ", "
+            + "%" + kernel_name + "_ci" + std::to_string(0) + ", "
+            + "%" + kernel_name + "_ci" + std::to_string(1) + ", "
+            + "%" + kernel_name + "_ci" + std::to_string(0) 
+            + "] : "
+            + kernel_memref + "\n";
+    code += "    memref.store %" + kernel_name + "_i" 
+            + std::to_string(kernel[2])
+            + " , %" + std::to_string(kernel_reg) 
+            + " ["
+            + "%" + kernel_name + "_ci" + std::to_string(0) + ", "
+            + "%" + kernel_name + "_ci" + std::to_string(1) + ", "
+            + "%" + kernel_name + "_ci" + std::to_string(0) + ", "
+            + "%" + kernel_name + "_ci" + std::to_string(0) 
+            + "] : "
+            + kernel_memref + "\n";
+    code += "    memref.store %" + kernel_name + "_i" 
+            + std::to_string(kernel[3])
+            + " , %" + std::to_string(kernel_reg) 
+            + " ["
+            + "%" + kernel_name + "_ci" + std::to_string(0) + ", "
+            + "%" + kernel_name + "_ci" + std::to_string(1) + ", "
+            + "%" + kernel_name + "_ci" + std::to_string(1) + ", "
+            + "%" + kernel_name + "_ci" + std::to_string(0) 
+            + "] : "
+            + kernel_memref + "\n";
+
+    mlir << code;
 
     // alloc output
     const auto [it_var2, flag2] = variable_map.insert({cur_layer.getName(),global_register_tracker++});
@@ -493,22 +571,27 @@ void MLIRGen::genMaxPooling2DLayer(Layer& prev_layer,
                    + " = "
                    + dict[ALLOC]
                    + "() : "
-                   + output_memref;
-    mlir << code << "\n";
+                   + output_memref
+                   + "\n";
+    code += "    // Strides size: " + std::to_string(stride.size()) + "\n";
+    mlir << code;
 
     // Generate linalg maxpooling dialect
-    stride.insert(stride.begin(), 1);
-    stride.push_back(1);
+    auto stride_gen = stride;
+    stride_gen.emplace(stride_gen.begin(), 1);
+    stride_gen.emplace_back(1);
+    
     code = "    " + dict[MAXPOOL] + "("
          + "%" + std::to_string(input_buffer_reg) + ", "
          + "%" + std::to_string(kernel_reg) + ", "
          + "%" + std::to_string(output_reg) + ")\n"
          + "    {\n"
-         + "        " + genStrides(stride) + "\n"
+         + "        " + genStrides(stride_gen) + "\n"
          + "    } : "
          + input_memref + ", "
          + kernel_memref + ", "
          + output_memref + "\n";
+    code += "    // Strides size: " + std::to_string(stride_gen.size()) + "\n";
     mlir << code;
     mlir << "\n";
 }
